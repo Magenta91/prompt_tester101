@@ -1,6 +1,16 @@
-# PDF Text Extractor and Tabulator
+# PDF Text Extractor with Context Prompt Testing
 
-A web application that extracts text from PDF files, processes it using OpenAI's GPT-4o model to identify structured information, and displays the results in a tabulated format with export options.
+A comprehensive web application that extracts text from PDF files, processes it using OpenAI's GPT-4o model to identify structured information, and displays the results in a tabulated format with export options. Features an integrated frontend prompt testing system for fine-tuning context extraction prompts.
+
+## 🚀 Key Features
+
+- **PDF Text Extraction**: Uses Amazon Textract (with Tesseract OCR fallback)
+- **AI-Powered Analysis**: GPT-4o model for intelligent data extraction
+- **Context Prompt Testing**: Frontend interface for testing custom context extraction prompts
+- **Real-time Streaming**: Live processing updates with streaming responses
+- **Multiple Export Formats**: XLSX, CSV, JSON, and PDF export options
+- **Context Generation**: LLM-based context extraction for every data point
+- **Cost Tracking**: Built-in OpenAI API cost monitoring
 
 ## Table of Contents
 
@@ -200,3 +210,106 @@ The AI prompts in `structured_llm_processor.py` can be customized to extract dif
 - **Context Filtering**: Customize which types of sentences are included as context
 
 You can customize these components to focus on specific types of information relevant to your documents.
+## 🧪 
+Context Prompt Testing
+
+The application includes a powerful frontend prompt testing system that allows you to:
+
+- **Test Custom Prompts**: Input custom context extraction prompts and see immediate results
+- **Real-time Feedback**: View how different prompts affect context generation
+- **Prompt Comparison**: Compare results from different prompt variations
+- **Live Processing**: Uses the same full pipeline as normal document processing
+
+### How to Use Prompt Testing:
+
+1. Upload a PDF document
+2. Scroll to the "Test Context Extraction Prompt" section
+3. Modify the prompt template (use `{row_data}` and `{text_content}` placeholders)
+4. Click "Test Prompt" to see results
+5. View context extraction results in the results table
+
+## 🛠️ Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/Magenta91/prompt_tester101.git
+cd prompt_tester101
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+3. Set up environment variables in `.env`:
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+AWS_ACCESS_KEY_ID=your_aws_key (optional)
+AWS_SECRET_ACCESS_KEY=your_aws_secret (optional)
+AWS_DEFAULT_REGION=us-east-1 (optional)
+```
+
+4. Run the application:
+```bash
+python app.py
+```
+
+5. Open your browser and navigate to `http://localhost:5000`
+
+## 📋 Requirements
+
+- Python 3.8+
+- OpenAI API key (required)
+- AWS credentials (optional, for Textract)
+- Tesseract OCR (fallback option)
+
+## 🔧 Configuration
+
+### Context Extraction Prompts
+
+You can modify context extraction prompts in two ways:
+
+1. **Frontend Testing**: Use the integrated prompt tester for temporary testing
+2. **Code Modification**: Edit the default prompt in `structured_llm_processor.py` (line ~305)
+
+### Processing Options
+
+- **Streaming Mode**: Real-time processing updates (default)
+- **Batch Mode**: Process entire document at once
+- **Cost Tracking**: Monitor OpenAI API usage and costs
+
+## 📊 Export Formats
+
+- **XLSX**: Excel format with structured data and context columns
+- **CSV**: Comma-separated values for data analysis
+- **JSON**: Raw structured data for programmatic use
+- **PDF**: Formatted report with extracted information
+
+## 🏗️ Architecture
+
+- **Frontend**: HTML5, CSS3, JavaScript (ES6+)
+- **Backend**: Flask (Python)
+- **AI Processing**: OpenAI GPT-4o
+- **Text Extraction**: Amazon Textract / Tesseract OCR
+- **Data Processing**: Pandas, NumPy
+- **Export**: openpyxl, reportlab
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🆘 Support
+
+For issues, questions, or contributions, please open an issue on GitHub.
+
+---
+
+**Built with ❤️ for intelligent document processing**
