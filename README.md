@@ -21,12 +21,15 @@ This application provides a streamlined way to extract structured information fr
 
 ## Features
 
-- **PDF Text Extraction**: Upload and extract text from PDF documents
+- **PDF Text Extraction**: Upload and extract text from PDF documents with AWS Textract and Tesseract OCR fallback
 - **AI-Powered Analysis**: Process text with OpenAI's GPT-4o model to identify structured information
+- **Comprehensive Context Aggregation**: Automatically tracks entities across document pages and aggregates all related descriptive sentences word-for-word in the Context column
 - **Interactive UI**: Clean, modern interface with drag-and-drop file upload
-- **Real-time Processing**: See extracted text immediately after upload
-- **Tabulated Results**: View structured data in a clean, organized table
-- **Multiple Export Options**: Download results as JSON, CSV, or PDF
+- **Real-time Processing**: See extracted text immediately after upload with streaming progress
+- **Tabulated Results**: View structured data in a clean, organized table with full context
+- **Multiple Export Options**: Download results as JSON, CSV, XLSX, or PDF
+- **Automatic Fallback**: Seamless fallback from AWS Textract to Tesseract OCR when credentials fail
+- **Environment Security**: Secure credential management with .env files
 - **Responsive Design**: Works on desktop and mobile devices
 
 ## Architecture
@@ -59,24 +62,31 @@ The application follows a client-server architecture with:
    - The file is sent to the server for processing
 
 2. **Text Extraction**:
-   - The `pdf_processor.py` module extracts raw text from the PDF 
-   - Uses PyPDF2 to access and read PDF content
-   - Extracted text is displayed to the user
+   - Primary: AWS Textract extracts structured data, tables, and key-value pairs
+   - Fallback: Tesseract OCR processes the PDF if AWS credentials fail
+   - Extracted text is displayed to the user with processing method indicated
 
 3. **AI Analysis**:
    - User initiates processing with the "Process with AI" button
-   - The `llm_processor.py` module sends the text to OpenAI's GPT-4o model
+   - The `structured_llm_processor.py` module processes data asynchronously with OpenAI's GPT-4o
    - Custom prompting guides the AI to identify structured information
    - The AI returns data categorized into predefined columns
 
-4. **Result Display**:
-   - Processed data is displayed in a table format
-   - Information is organized by category and extracted text
+4. **Context Aggregation**:
+   - The `context_aggregator.py` module tracks entities across all document pages
+   - For each entity (person, company, metric), it finds all related descriptive sentences
+   - Contexts are aggregated word-for-word from the original document
+   - Conflict resolution ensures each sentence is assigned to the most relevant entity
 
-5. **Data Export**:
-   - User selects preferred export format (JSON, CSV, PDF)
+5. **Result Display**:
+   - Processed data is displayed in a table format with comprehensive Context column
+   - Information is organized by source, type, field, value, page, and full context
+   - Real-time streaming shows progress during processing
+
+6. **Data Export**:
+   - User selects preferred export format (JSON, CSV, XLSX, PDF)
    - The `export_utils.py` module handles conversion to the selected format
-   - Generated file is downloaded to the user's device
+   - Generated file includes all structured data with complete context information
 
 ## Setup and Installation
 
@@ -144,11 +154,49 @@ The application provides three export formats:
 
 The export functionality is handled in `export_utils.py` and the frontend JavaScript.
 
+## Context Aggregation System
+
+The application features a sophisticated context aggregation system that ensures comprehensive information capture:
+
+### Entity Tracking
+- **Cross-Page Tracking**: Entities are tracked across all document pages using unique identifiers
+- **Smart Matching**: Uses exact string matching, synonyms, and fuzzy matching for entity identification
+- **Conflict Resolution**: Advanced algorithm ensures each sentence is assigned to the most relevant entity
+
+### Context Collection
+- **Verbatim Extraction**: All descriptive sentences are captured exactly as they appear in the document, including special characters (†, •, ◦, ¹, etc.)
+- **Language Integrity**: Original grammar, casing, punctuation, and formatting are preserved without alteration (e.g., "mn" not "million", "LHFY22" preserved)
+- **Comprehensive Coverage**: Every mention of an entity across the entire document is aggregated using multiple search strategies
+- **Special Character Preservation**: Bullet points, superscripts, currency symbols, and abbreviations are maintained exactly as in source
+- **No Truncation**: Full contexts are preserved without "(truncated X characters)" limitations
+- **Advanced Deduplication**: Intelligent duplicate detection removes identical sentences while preserving unique information
+- **Context Validation**: Built-in validation checks for empty contexts and duplicate issues with detailed logging
+
+### Output Format
+- **Structured Data**: Traditional fields (Name, Value, etc.) remain in their respective columns
+- **Context Column**: Contains all related descriptive sentences concatenated with period separation
+- **No Duplication**: Duplicate sentences are automatically filtered while preserving unique contexts
+
+### Example
+If a financial document mentions:
+- Page 1: "† Underlying NPAT¹ of AUD 46.7mn (1HFY22: AUD 30.6mn)"
+- Page 1: "We are pleased with the underlying NPAT performance which exceeded our forecasts by 12%."
+- Page 2: "† Tysers underlying pre-tax profit contributed AUD 18.0mn for the 3 months to 31 December 2022"
+
+The Context column for "Underlying_NPAT_1HFY23" = "AUD 46.7mn" will contain: "† Underlying NPAT¹ of AUD 46.7mn (1HFY22: AUD 30.6mn). We are pleased with the underlying NPAT performance which exceeded our forecasts by 12%."
+
+### Enhanced Processing Features
+- **Multi-Strategy Matching**: Uses exact phrase matching, word boundary matching, and fuzzy matching for comprehensive context discovery
+- **Financial Document Optimized**: Specifically designed for financial reports with bullet points, footnotes, and structured data
+- **Duplicate Prevention**: Automatically removes duplicate sentences while preserving unique contexts
+- **Entity Grouping**: Groups related fields (e.g., all Tysers-related metrics) for comprehensive context aggregation
+
 ## Customization
 
-The AI prompt in `llm_processor.py` can be customized to extract different types of information or to format the output differently. The current prompt instructs the model to extract:
+The AI prompts in `structured_llm_processor.py` can be customized to extract different types of information. The context aggregation system in `context_aggregator.py` can be configured for:
 
-- Category: Entity type (Person, Organization, Location, etc.)
-- Extracted Text: The identified data points or entities
+- **Entity Priority**: Adjust which fields are considered primary identifiers
+- **Matching Sensitivity**: Modify fuzzy matching thresholds
+- **Context Filtering**: Customize which types of sentences are included as context
 
-You can customize this prompt to focus on specific types of information relevant to your documents.
+You can customize these components to focus on specific types of information relevant to your documents.

@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Context Extraction Prompt Tester</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            height: 100vh;
+            display: flex;
+        }
+        
+        .container {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+        }
+        
+        .left-panel {
+            width: 50%;
+            background: white;
+            border-right: 2px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .right-panel {
+            width: 50%;
+            background: white;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .panel-header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .panel-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        
+        .form-group input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px dashed #ddd;
+            border-radius: 6px;
+            background: #f9f9f9;
+        }
+        
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+        
+        .btn:hover {
+            background: #2980b9;
+        }
+        
+        .btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .csv-output {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .download-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        
+        .btn-download {
+            background: #27ae60;
+            margin-right: 10px;
+        }
+        
+        .btn-download:hover {
+            background: #229954;
+        }
+        
+        .prompt-template {
+            height: 300px;
+        }
+        
+        .sample-data {
+            height: 200px;
+        }
+        
+        .output-display {
+            height: 500px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Left Panel - Input -->
+        <div class="left-panel">
+            <div class="panel-header">
+                🔧 Prompt Template Tester
+            </div>
+            <div class="panel-content">
+                <div class="form-group">
+                    <label for="promptTemplate">Context Extraction Prompt Template:</label>
+                    <textarea id="promptTemplate" class="prompt-template" placeholder="Enter your prompt template here...">You are a precise document analysis expert. Your job is to:
+
+For each entity (e.g., a student, company, metric) represented in {row_data}, find all sentences and phrases across the entire document {text_content} that describe, explain, or add information about that entity.
+
+Copy the sentences word-for-word exactly as they appear in the document (do not paraphrase, do not correct grammar, do not drop words).
+
+Concatenate multiple mentions into a single Context value for that entity, separated by periods or newlines.
+
+Ensure integrity of language: text must remain unaltered, in the same language and order.
+
+Any text that does not describe any entity in {row_data} must be placed in a separate "General Commentary" row. Every single word from the input document must appear in either:
+- An entity's Context, or
+- The "General Commentary" row (if it is not linked to any entity).
+
+STRICT MATCHING CRITERIA:
+- Include any sentence or phrase that clearly refers to the entity by name, value, or associated identifiers.
+- Accept contextual descriptions, traits, or commentary even if not directly numerical (e.g., "ABC is hardworking", "ABC loves to ride bikes").
+- Reject text only if it cannot reasonably be tied to any entity.
+
+Return JSON:
+For entity rows:
+{"context": "exact text from document related to this entity", "general_commentary": null}
+
+For general commentary row:
+{"context": null, "general_commentary": "all remaining text, word for word, that was not tied to any entity"}
+
+Be exhaustive: make sure no text is lost or skipped. The final CSV/Excel must account for every word in the input file.</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="sampleData">Sample Document Text:</label>
+                    <textarea id="sampleData" class="sample-data" placeholder="Enter sample document text for testing...">Summary:
+† Underlying NPAT¹ of AUD 46.7mn (1HFY22: AUD 30.6mn)
+† Revenue growth of 15% year-on-year driven by strong performance
+† Total revenue increased significantly during the period
+
+CEO Commentary:
+We are pleased with the underlying NPAT performance which exceeded our forecasts by 12%.
+The underlying NPAT of AUD 46.7mn represents strong operational efficiency.
+Revenue growth of 15% demonstrates our market leadership.
+
+Tysers Performance:
+† Tysers underlying pre-tax profit contributed AUD 18.0mn for the 3 months to 31 December 2022
+† Tysers performance for the three months since acquisition on 1 October has exceeded our forecasts
+† Integration of Tysers operations is proceeding smoothly</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="pdfFile">📄 Upload PDF File (Recommended for Real Testing):</label>
+                    <input type="file" id="pdfFile" accept=".pdf" />
+                    <small style="color: #666; font-size: 12px; display: block; margin-top: 5px;">
+                        Upload your PDF to test context extraction with real document data
+                    </small>
+                </div>
+                
+                <button class="btn" onclick="testPrompt()">🧪 Test Prompt</button>
+                
+                <div id="status" class="status" style="display: none;"></div>
+            </div>
+        </div>
+        
+        <!-- Right Panel - Output -->
+        <div class="right-panel">
+            <div class="panel-header">
+                📊 CSV Output Preview
+            </div>
+            <div class="panel-content">
+                <div class="csv-output output-display" id="csvOutput">
+                    Click "Test Prompt" to see the CSV output here...
+                </div>
+                
+                <div class="download-section">
+                    <button class="btn btn-download" onclick="downloadCSV()" id="downloadBtn" disabled>
+                        📥 Download CSV
+                    </button>
+                    <button class="btn btn-download" onclick="downloadXLSX()" id="downloadXlsxBtn" disabled>
+                        📊 Download XLSX
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentCsvData = '';
+        
+        async function testPrompt() {
+            const promptTemplate = document.getElementById('promptTemplate').value;
+            const sampleData = document.getElementById('sampleData').value;
+            const pdfFile = document.getElementById('pdfFile').files[0];
+            const statusDiv = document.getElementById('status');
+            const outputDiv = document.getElementById('csvOutput');
+            
+            if (!promptTemplate.trim()) {
+                showStatus('Please enter a prompt template', 'error');
+                return;
+            }
+            
+            if (!sampleData.trim() && !pdfFile) {
+                showStatus('Please enter sample data or upload a PDF file', 'error');
+                return;
+            }
+            
+            showStatus('Testing prompt...', 'loading');
+            
+            try {
+                const formData = new FormData();
+                formData.append('prompt_template', promptTemplate);
+                
+                if (pdfFile) {
+                    formData.append('file', pdfFile);
+                } else {
+                    formData.append('sample_data', sampleData);
+                }
+                
+                const response = await fetch('/test-prompt', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentCsvData = result.csv_data;
+                    outputDiv.textContent = result.csv_preview;
+                    showStatus(`✅ Success! Generated ${result.row_count} rows`, 'success');
+                    
+                    // Enable download buttons
+                    document.getElementById('downloadBtn').disabled = false;
+                    document.getElementById('downloadXlsxBtn').disabled = false;
+                } else {
+                    throw new Error(result.error || 'Unknown error occurred');
+                }
+                
+            } catch (error) {
+                console.error('Error testing prompt:', error);
+                showStatus(`❌ Error: ${error.message}`, 'error');
+                outputDiv.textContent = 'Error occurred while testing prompt.';
+            }
+        }
+        
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
+        
+        function downloadCSV() {
+            if (!currentCsvData) {
+                showStatus('No CSV data to download', 'error');
+                return;
+            }
+            
+            const blob = new Blob([currentCsvData], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `prompt_test_${new Date().getTime()}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+        
+        async function downloadXLSX() {
+            if (!currentCsvData) {
+                showStatus('No data to download', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/download-xlsx', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ csv_data: currentCsvData })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `prompt_test_${new Date().getTime()}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+            } catch (error) {
+                console.error('Error downloading XLSX:', error);
+                showStatus(`❌ Error downloading XLSX: ${error.message}`, 'error');
+            }
+        }
+        
+        // Handle file upload
+        document.getElementById('pdfFile').addEventListener('change', function(e) {
+            if (e.target.files.length > 0) {
+                document.getElementById('sampleData').value = '';
+                showStatus('PDF file selected. Sample data cleared.', 'success');
+            }
+        });
+        
+        // Handle sample data input
+        document.getElementById('sampleData').addEventListener('input', function(e) {
+            if (e.target.value.trim()) {
+                document.getElementById('pdfFile').value = '';
+            }
+        });
+    </script>
+</body>
+</html>

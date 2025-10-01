@@ -49,6 +49,65 @@
             </div>
         </div>
 
+        <div class="card mb-4 shadow-sm d-none" id="prompt-testing-section">
+            <div class="card-header bg-warning text-dark">
+                <h4 class="mb-0"><i class="bi bi-code-square"></i> Test Context Extraction Prompt</h4>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="custom-prompt" class="form-label">Custom Context Extraction Prompt:</label>
+                    <textarea class="form-control" id="custom-prompt" rows="8" placeholder="Enter your custom prompt here. Use {row_data} and {text_content} as placeholders.">You are a meticulous document analysis system. Your task is to:
+
+Entity Context Collection
+For {row_data}, collect all full sentences from {text_content} that describe or mention the entity by name, value, or identifier.
+Always extract the entire sentence/paragraph, never fragments.
+Keep duplicates only if they are in separate parts of the document and contextually meaningful.
+
+Concatenation
+Merge all entity-related sentences into one coherent block, preserving original order of appearance in the document.
+Separate sentences with a period or newline (do not cut off mid-sentence).
+
+Language Integrity
+Copy text exactly as it appears (same words, punctuation, grammar, and casing).
+Do not paraphrase, summarize, or "clean up" wording.
+
+General Commentary
+Any text that does not belong to an entity (i.e., not tied to any field/value) must be placed, word-for-word, into the "General Commentary" row.
+This row should contain all leftover text after entity contexts are assigned.
+
+No Text Loss Guarantee
+Every word from the input document must appear in the output (either in entity context or in general commentary).
+If in doubt whether a sentence belongs to an entity → place it in General Commentary instead of discarding.
+
+Return JSON:
+For entity rows:
+{"context": "all related sentences for this entity, in order, exact wording", "general_commentary": null}
+
+For the general commentary row:
+{"context": null, "general_commentary": "all remaining sentences word-for-word, in order"}</textarea>
+                </div>
+                <div class="d-flex gap-2 mb-3">
+                    <button class="btn btn-warning" id="test-prompt-btn"><i class="bi bi-play-circle"></i> Test Prompt</button>
+                    <button class="btn btn-outline-secondary" id="reset-prompt-btn">Reset to Default</button>
+                </div>
+                <div id="prompt-results" class="d-none">
+                    <h5>Context Results:</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Field</th>
+                                    <th>Value</th>
+                                    <th>Context</th>
+                                </tr>
+                            </thead>
+                            <tbody id="context-results-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card mb-4 shadow-sm d-none" id="results-section">
             <div class="card-header bg-success text-white">
                 <h4 class="mb-0"><i class="bi bi-table"></i> Extracted Information</h4>

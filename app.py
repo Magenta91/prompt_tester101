@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file, Response
+from flask import Flask, render_template, request, jsonify, send_file, Response, session
 import os
 import tempfile
 import base64
@@ -11,10 +11,11 @@ load_dotenv()
 
 from textract_processor import extract_text_from_pdf, extract_text_from_pdf_bytes, extract_structured_data_from_pdf_bytes
 from llm_processor import process_text_with_llm
-from structured_llm_processor import process_structured_data_with_llm
+from structured_llm_processor import process_structured_data_with_llm, process_structured_data_with_llm_async
 from export_utils import export_to_pdf
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-for-sessions-change-in-production')
 
 # Ensure templates directory exists
 os.makedirs('templates', exist_ok=True)
@@ -37,6 +38,14 @@ def extract():
         # Extract structured data from PDF using Amazon Textract
         pdf_bytes = file.read()
         structured_data = extract_structured_data_from_pdf_bytes(pdf_bytes)
+        
+        # Store file data in session for prompt testing
+        import pickle
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pkl')
+        with open(temp_file.name, 'wb') as f:
+            pickle.dump(structured_data, f)
+        session['file_data_path'] = temp_file.name
+        print(f"Stored file data at: {temp_file.name}")
         
         # Return the new JSON format
         return jsonify(structured_data)
@@ -339,7 +348,7 @@ def process_stream():
     
     def generate():
         try:
-            # Process the structured JSON data 
+            # Process the structured JSON data with full document text for verbatim context extraction
             result = process_structured_data_with_llm(data)
             
             # Initialize CSV-like output for XLSX format
@@ -348,26 +357,69 @@ def process_stream():
             commentary_collection = []  # Collect all commentary for single row
             
             # Start with header row
-            header_row = f"row{row_counter}: source,type,field,value,page,context"
+            header_row = f"row{row_counter}: Source,Type,Field,Value,Page,Context"
             csv_output.append(header_row)
             yield f"data: {json.dumps({'type': 'header', 'content': header_row})}\n\n"
             row_counter += 1
             
-            # Process tables with enhanced financial data extraction
-            if 'processed_tables' in result and result['processed_tables']:
-                for i, table in enumerate(result['processed_tables']):
-                    if table.get('structured_table') and not table['structured_table'].get('error'):
-                        table_data = table['structured_table']
-                        page = table.get('page', 'N/A')
-                        
-                        # Stream each table data row in XLSX format (no individual context)
-                        for key, value in table_data.items():
-                            if key != 'error' and value:
-                                # Create CSV-formatted row without individual context
-                                csv_row = f"row{row_counter}: Table {i+1},Table Data,{key},{clean_csv_value(str(value))},{page},"
-                                csv_output.append(csv_row)
-                                yield f"data: {json.dumps({'type': 'row', 'content': csv_row})}\n\n"
-                                row_counter += 1
+            # Use enhanced data with comprehensive context if available
+            enhanced_data = result.get('enhanced_data_with_comprehensive_context', [])
+            
+            if enhanced_data:
+                # Process enhanced data with full context
+                for entity in enhanced_data:
+                    source = entity.get('source', 'Unknown')
+                    data_type = entity.get('type', 'Data')
+                    field = entity.get('field', entity.get('Name', 'Unknown Field'))
+                    value = entity.get('value', '')
+                    page = entity.get('page', 'N/A')
+                    # Try both capitalized and lowercase Context keys
+                    context = entity.get('Context', '') or entity.get('context', '')
+                    
+                    # If context is empty, try to generate it from document text using LLM
+                    if not context and data.get('document_text'):
+                        import asyncio
+                        from structured_llm_processor import match_commentary_to_data
+                        try:
+                            row_data = f"Field: {field}, Value: {value}, Type: {data_type}"
+                            context_result = asyncio.run(match_commentary_to_data(row_data, data['document_text']))
+                            context = context_result.get('context', '') or context_result.get('commentary', '')
+                        except Exception as e:
+                            print(f"Error using LLM for context: {e}")
+                            context = find_relevant_document_context(field, value, data['document_text'])
+                    
+                    # Create CSV-formatted row with comprehensive context
+                    csv_row = f"row{row_counter}: {source},{data_type},{field},{clean_csv_value(str(value))},{page},{clean_csv_value(context)}"
+                    csv_output.append(csv_row)
+                    yield f"data: {json.dumps({'type': 'row', 'content': csv_row})}\n\n"
+                    row_counter += 1
+            else:
+                # Fallback to original processing if enhanced data is not available
+                # Process tables with enhanced financial data extraction
+                if 'processed_tables' in result and result['processed_tables']:
+                    for i, table in enumerate(result['processed_tables']):
+                        if table.get('structured_table') and not table['structured_table'].get('error'):
+                            table_data = table['structured_table']
+                            page = table.get('page', 'N/A')
+                            
+                            # Stream each table data row in XLSX format (no individual context)
+                            for key, value in table_data.items():
+                                if key != 'error' and value:
+                                    # Generate context for this field/value using LLM
+                                    import asyncio
+                                    from structured_llm_processor import match_commentary_to_data
+                                    try:
+                                        row_data = f"Field: {key}, Value: {value}, Type: Table Data"
+                                        context_result = asyncio.run(match_commentary_to_data(row_data, data.get('document_text', [])))
+                                        context = context_result.get('context', '') or context_result.get('commentary', '')
+                                    except Exception as e:
+                                        print(f"Error using LLM for context: {e}")
+                                        context = find_relevant_document_context(key, value, data.get('document_text', []))
+                                    # Create CSV-formatted row with context
+                                    csv_row = f"row{row_counter}: Table {i+1},Table Data,{key},{clean_csv_value(str(value))},{page},{clean_csv_value(context)}"
+                                    csv_output.append(csv_row)
+                                    yield f"data: {json.dumps({'type': 'row', 'content': csv_row})}\n\n"
+                                    row_counter += 1
             
             # Process key-value pairs
             if 'processed_key_values' in result and result['processed_key_values']:
@@ -375,8 +427,18 @@ def process_stream():
                 if kv_data and not kv_data.get('error'):
                     for key, value in kv_data.items():
                         if key != 'error' and value:
-                            # Create CSV-formatted row without individual context
-                            csv_row = f"row{row_counter}: Key-Value Pairs,Structured Data,{key},{clean_csv_value(str(value))},N/A,"
+                            # Generate context for this field/value using LLM
+                            import asyncio
+                            from structured_llm_processor import match_commentary_to_data
+                            try:
+                                row_data = f"Field: {key}, Value: {value}, Type: Structured Data"
+                                context_result = asyncio.run(match_commentary_to_data(row_data, data.get('document_text', [])))
+                                context = context_result.get('context', '') or context_result.get('commentary', '')
+                            except Exception as e:
+                                print(f"Error using LLM for context: {e}")
+                                context = find_relevant_document_context(key, value, data.get('document_text', []))
+                            # Create CSV-formatted row with context
+                            csv_row = f"row{row_counter}: Key-Value Pairs,Structured Data,{key},{clean_csv_value(str(value))},N/A,{clean_csv_value(context)}"
                             csv_output.append(csv_row)
                             yield f"data: {json.dumps({'type': 'row', 'content': csv_row})}\n\n"
                             row_counter += 1
@@ -392,8 +454,18 @@ def process_stream():
                                 data_type = 'Footnote' if 'footnote' in key.lower() else 'Financial Data'
                                 field_name = key.replace('_Footnote', ' (Footnote)').replace('Footnote_', 'Footnote: ')
                                 
-                                # Create CSV-formatted row without individual context
-                                csv_row = f"row{row_counter}: Text Chunk {chunk_idx+1},{data_type},{field_name},{clean_csv_value(str(value))},N/A,"
+                                # Generate context for this field/value using LLM
+                                import asyncio
+                                from structured_llm_processor import match_commentary_to_data
+                                try:
+                                    row_data = f"Field: {field_name}, Value: {value}, Type: {data_type}"
+                                    context_result = asyncio.run(match_commentary_to_data(row_data, data.get('document_text', [])))
+                                    context = context_result.get('context', '') or context_result.get('commentary', '')
+                                except Exception as e:
+                                    print(f"Error using LLM for context: {e}")
+                                    context = find_relevant_document_context(field_name, value, data.get('document_text', []))
+                                # Create CSV-formatted row with context
+                                csv_row = f"row{row_counter}: Text Chunk {chunk_idx+1},{data_type},{field_name},{clean_csv_value(str(value))},N/A,{clean_csv_value(context)}"
                                 csv_output.append(csv_row)
                                 yield f"data: {json.dumps({'type': 'row', 'content': csv_row})}\n\n"
                                 row_counter += 1
@@ -514,6 +586,81 @@ def process_stream():
         'X-Accel-Buffering': 'no'
     })
 
+@app.route('/test_prompt', methods=['POST'])
+async def test_prompt():
+    """Test a custom context extraction prompt"""
+    try:
+        from structured_llm_processor import set_custom_context_prompt, clear_custom_context_prompt, get_custom_context_prompt
+        
+        print("Test prompt endpoint called")
+        
+        # Get the custom prompt from request
+        data = request.get_json()
+        custom_prompt = data.get('custom_prompt', '').strip()
+        
+        print(f"Custom prompt length: {len(custom_prompt)}")
+        
+        if not custom_prompt:
+            return jsonify({'error': 'Custom prompt is required'}), 400
+        
+        # Set the custom prompt
+        set_custom_context_prompt(custom_prompt)
+        
+        # Verify the prompt was set
+        verification_prompt = get_custom_context_prompt()
+        print(f"Verification - Custom prompt set successfully: {verification_prompt is not None}")
+        if verification_prompt:
+            print(f"Verification - Prompt preview: {verification_prompt[:100]}...")
+        
+        # Get the uploaded file data from temporary file
+        if 'file_data_path' not in session:
+            return jsonify({'error': 'No file data found. Please upload a PDF first.'}), 400
+        
+        # Load file data from temporary file
+        import pickle
+        try:
+            with open(session['file_data_path'], 'rb') as f:
+                file_data = pickle.load(f)
+        except FileNotFoundError:
+            return jsonify({'error': 'File data expired. Please upload the PDF again.'}), 400
+        
+        # Process with custom prompt
+        current_prompt = get_custom_context_prompt()
+        print(f"About to process with custom prompt set: {current_prompt is not None}")
+        if current_prompt:
+            print(f"Custom prompt preview: {current_prompt[:100]}...")
+        result = await process_structured_data_with_llm_async(file_data)
+        
+        # Check if custom prompt is still set after processing
+        post_process_prompt = get_custom_context_prompt()
+        print(f"Custom prompt still set after processing: {post_process_prompt is not None}")
+        
+        # Clear the custom prompt to restore default
+        clear_custom_context_prompt()
+        
+        # Extract context data for display
+        context_data = []
+        if 'enhanced_data_with_comprehensive_context' in result:
+            for entity in result['enhanced_data_with_comprehensive_context']:
+                context_data.append({
+                    'field': entity.get('field', 'Unknown'),
+                    'value': entity.get('value', ''),
+                    'context': entity.get('context', entity.get('Context', ''))
+                })
+        
+        return jsonify({
+            'success': True,
+            'context_data': context_data,
+            'total_entities': len(context_data)
+        })
+        
+    except Exception as e:
+        # Make sure to clear custom prompt on error
+        from structured_llm_processor import clear_custom_context_prompt
+        clear_custom_context_prompt()
+        print(f"Error testing prompt: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/export_xlsx', methods=['POST'])
 def export_xlsx():
     """Export CSV data to XLSX format with specific sheet name"""
@@ -539,7 +686,7 @@ def export_xlsx():
         if ws is not None:
             ws.title = "Extracted_data_comments"
         
-        # Parse CSV data properly handling multi-line content
+        # Parse CSV data properly handling multi-line content and long contexts
         if ws is not None:
             # Use proper CSV parsing to handle multi-line quoted fields
             csv_reader = csv.reader(StringIO(csv_data))
@@ -557,13 +704,23 @@ def export_xlsx():
                         # Add to worksheet
                         for col_idx, cell_value in enumerate(row_line, 1):
                             # Handle multi-line content in Excel cells
-                            if isinstance(cell_value, str) and '\\n' in cell_value:
-                                cell_value = cell_value.replace('\\n', '\n')
+                            if isinstance(cell_value, str):
+                                if '\\n' in cell_value:
+                                    cell_value = cell_value.replace('\\n', '\n')
+                                # Ensure no truncation of long contexts
+                                if len(cell_value) > 32767:  # Excel cell limit
+                                    # Split long content but keep it readable
+                                    cell_value = cell_value[:32760] + "..."
                             
                             cell = ws.cell(row=row_idx, column=col_idx, value=cell_value)
                             
-                            # Enable text wrapping for multi-line content
+                            # Enable text wrapping for multi-line content, especially Context column
                             cell.alignment = Alignment(wrap_text=True, vertical='top')
+                            
+                            # Special handling for Context column (usually last column)
+                            if col_idx == len(row_line) and row_idx > 1:  # Context column, not header
+                                # Set larger row height for context
+                                ws.row_dimensions[row_idx].height = max(60, len(str(cell_value)) // 100 * 15)
                             
                             # Style header row
                             if row_idx == 1:
@@ -571,18 +728,35 @@ def export_xlsx():
                                 cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
                                 cell.alignment = Alignment(horizontal="center", wrap_text=True)
         
-            # Auto-adjust column widths
+            # Auto-adjust column widths with special handling for Context column
             try:
-                for column in ws.columns:
+                for col_idx, column in enumerate(ws.columns, 1):
                     max_length = 0
                     column_letter = column[0].column_letter
+                    is_context_column = False
+                    
+                    # Check if this is the Context column (usually the last column)
+                    if col_idx == ws.max_column:
+                        header_cell = ws.cell(row=1, column=col_idx)
+                        if header_cell.value and 'context' in str(header_cell.value).lower():
+                            is_context_column = True
+                    
                     for cell in column:
                         try:
-                            if cell.value and len(str(cell.value)) > max_length:
-                                max_length = len(str(cell.value))
+                            if cell.value:
+                                cell_length = len(str(cell.value))
+                                if cell_length > max_length:
+                                    max_length = cell_length
                         except:
                             pass
-                    adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
+                    
+                    if is_context_column:
+                        # Context column gets wider width to accommodate longer text
+                        adjusted_width = min(max_length // 4 + 20, 100)  # Wider for context, cap at 100
+                    else:
+                        # Regular columns
+                        adjusted_width = min(max_length + 2, 30)  # Cap at 30 characters for regular columns
+                    
                     ws.column_dimensions[column_letter].width = adjusted_width
             except Exception as width_error:
                 print(f"Error adjusting column widths: {width_error}")
@@ -615,8 +789,45 @@ def process():
         # Process the structured JSON data with separate LLM calls and commentary matching
         result = process_structured_data_with_llm(data)
         
-        # Use the enhanced data with commentary if available
-        if 'enhanced_data_with_commentary' in result and result['enhanced_data_with_commentary']:
+        # Use the enhanced data with comprehensive context if available
+        if 'enhanced_data_with_comprehensive_context' in result and result['enhanced_data_with_comprehensive_context']:
+            clean_data = result['enhanced_data_with_comprehensive_context']
+            
+            # Ensure all entities have contexts
+            for entity in clean_data:
+                # Try both capitalized and lowercase Context keys
+                current_context = entity.get('Context', '') or entity.get('context', '')
+                
+                # If context is empty, try to generate it from document text
+                if not current_context and data.get('document_text'):
+                    field = entity.get('field', entity.get('Name', ''))
+                    value = entity.get('value', '')
+                    # Generate context using LLM with updated prompt
+                    import asyncio
+                    from structured_llm_processor import match_commentary_to_data
+                    try:
+                        row_data = f"Field: {field}, Value: {value}, Type: Enhanced Data"
+                        context_result = asyncio.run(match_commentary_to_data(row_data, data['document_text']))
+                        generated_context = context_result.get('context', '') or context_result.get('commentary', '')
+                    except Exception as e:
+                        print(f"Error using LLM for context: {e}")
+                        generated_context = find_relevant_document_context(field, value, data['document_text'])
+                    entity['context'] = generated_context  # Use lowercase key for consistency
+            
+            # Add context aggregation summary if available
+            if result.get('context_aggregation_summary'):
+                summary = result['context_aggregation_summary']
+                clean_data.append({
+                    'source': 'Context Aggregation',
+                    'type': 'Processing Summary',
+                    'field': 'Aggregation Statistics',
+                    'value': f"Entities: {summary.get('total_entities', 0)}, Contexts Found: {summary.get('total_contexts_found', 0)}",
+                    'page': 'N/A',
+                    'context': f"Processed {summary.get('total_sentences', 0)} sentences across document. Found contexts for {summary.get('entities_with_context', 0)} entities.",
+                    'has_commentary': True
+                })
+        elif 'enhanced_data_with_commentary' in result and result['enhanced_data_with_commentary']:
+            # Fallback to legacy enhanced data
             clean_data = result['enhanced_data_with_commentary']
             
             # Add general commentary as a separate row if it exists

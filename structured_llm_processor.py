@@ -14,6 +14,26 @@ load_dotenv()
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
+# Global variable to store custom prompt for testing
+_custom_context_prompt = None
+
+def set_custom_context_prompt(prompt: str):
+    """Set a custom context extraction prompt for testing"""
+    global _custom_context_prompt
+    _custom_context_prompt = prompt
+    print(f"Custom context prompt set (length: {len(prompt)})")
+
+def clear_custom_context_prompt():
+    """Clear the custom prompt and return to default"""
+    global _custom_context_prompt
+    _custom_context_prompt = None
+    print("Custom context prompt cleared")
+
+def get_custom_context_prompt():
+    """Get the current custom prompt for debugging"""
+    global _custom_context_prompt
+    return _custom_context_prompt
+
 # GPT-4o-mini pricing per 1M tokens (as of 2024)
 GPT_4O_MINI_INPUT_COST = 0.150  # $0.150 per 1M input tokens
 GPT_4O_MINI_OUTPUT_COST = 0.600  # $0.600 per 1M output tokens
@@ -275,35 +295,44 @@ async def match_commentary_to_data(row_data: str,
     """Match document text commentary to table row data with strict relevance validation"""
     text_content = '\n'.join(text_chunks)
 
-    prompt = f"""You are a strict document analysis expert. Your job is to find ONLY highly relevant commentary that directly explains a specific data point.
+    # Use custom prompt if set, otherwise use default
+    print(f"CRITICAL DEBUG: match_commentary_to_data called for {row_data[:50]}...")
+    print(f"CRITICAL DEBUG: _custom_context_prompt is not None: {_custom_context_prompt is not None}")
+    if _custom_context_prompt:
+        print(f"CRITICAL DEBUG: Using custom context prompt!")
+        print(f"CRITICAL DEBUG: Custom prompt: {_custom_context_prompt[:100]}...")
+        prompt = _custom_context_prompt.replace('{row_data}', row_data).replace('{text_content}', text_content)
+    else:
+        print(f"CRITICAL DEBUG: Using default context prompt!")
+        prompt = f"""You are a meticulous document analysis system. Your task is to:
 
-DATA POINT TO MATCH: {row_data}
+Entity Context Collection
+For {row_data}, collect all full sentences from {text_content} that describe or mention the entity by name, value, or identifier.
+Always extract the entire sentence/paragraph, never fragments.
+Keep duplicates only if they are in separate parts of the document and contextually meaningful.
 
-DOCUMENT TEXT TO SEARCH:
-{text_content}
+Concatenation
+Merge all entity-related sentences into one coherent block, preserving original order of appearance in the document.
+Separate sentences with a period or newline (do not cut off mid-sentence).
 
-ULTRA-STRICT MATCHING CRITERIA:
-1. The commentary MUST specifically mention the exact field name, value, or closely related terms
-2. The commentary MUST provide meaningful explanation, context, or analysis of THIS specific data point
-3. The commentary MUST be a complete sentence or paragraph that makes sense on its own
-4. REJECT any text that:
-   - Only mentions the topic generally without the specific value
-   - Starts mid-sentence or is incomplete
-   - Talks about different data points or unrelated information
-   - Is just a list item without explanation
-   - Contains only the value without context
+Language Integrity
+Copy text exactly as it appears (same words, punctuation, grammar, and casing).
+Do not paraphrase, summarize, or "clean up" wording.
 
-RELEVANCE SCORING:
-- Score 0-10 where 10 = perfect match with specific explanation
-- Only return commentary with score 8+ (highly relevant)
-- If best match scores below 8, return null
+General Commentary
+Any text that does not belong to an entity (i.e., not tied to any field/value) must be placed, word-for-word, into the "General Commentary" row.
+This row should contain all leftover text after entity contexts are assigned.
+
+No Text Loss Guarantee
+Every word from the input document must appear in the output (either in entity context or in general commentary).
+If in doubt whether a sentence belongs to an entity → place it in General Commentary instead of discarding.
 
 Return JSON:
-{{"commentary": "complete relevant explanation", "relevant": true, "relevance_score": 9}}
-OR  
-{{"commentary": null, "relevant": false, "relevance_score": 3}}
+For entity rows:
+{{"context": "all related sentences for this entity, in order, exact wording", "general_commentary": null}}
 
-Be extremely selective - better to return no commentary than irrelevant commentary."""
+For the general commentary row:
+{{"context": null, "general_commentary": "all remaining sentences word-for-word, in order"}}"""
 
     try:
         loop = asyncio.get_event_loop()
@@ -427,8 +456,345 @@ async def process_structured_data_with_llm_async(
 
 async def process_commentary_matching(results: Dict[str, Any],
                                       document_text: List[str]) -> None:
-    """Process commentary matching for all extracted data with optimized performance"""
-    print("Starting optimized commentary matching phase...")
+    """Process comprehensive verbatim context aggregation for all extracted data"""
+    print("Starting comprehensive verbatim context aggregation...")
+    print(f"Custom prompt status at start of processing: {_custom_context_prompt is not None}")
+    if _custom_context_prompt:
+        print(f"Custom prompt preview at processing: {_custom_context_prompt[:100]}...")
+    
+    try:
+        # Enhanced verbatim context extraction
+        enhanced_entities = await extract_verbatim_contexts(results, document_text)
+        
+        # Apply context-only enhancement using the existing function
+        from app import find_relevant_document_context
+        full_document_text = '\n'.join(document_text)
+        
+        # Enhance contexts for entities that don't have them
+        for entity in enhanced_entities:
+            if not entity.get('Context') and not entity.get('context'):
+                field = entity.get('field', entity.get('Name', ''))
+                value = entity.get('value', '')
+                if field and value:
+                    context = find_relevant_document_context(field, value, document_text)
+                    entity['context'] = context
+        
+        final_entities = enhanced_entities
+        
+        # Store enhanced data back in results
+        results["enhanced_data_with_comprehensive_context"] = final_entities
+        results["context_aggregation_summary"] = {
+            'total_entities': len(enhanced_entities),
+            'entities_with_context': len([e for e in enhanced_entities if e.get('Context')]),
+            'method': 'verbatim_extraction'
+        }
+        
+        print(f"Verbatim context aggregation completed for {len(enhanced_entities)} entities")
+        
+        # Update the existing enhanced_data_with_commentary for backward compatibility
+        if not results.get("enhanced_data_with_commentary"):
+            results["enhanced_data_with_commentary"] = enhanced_entities
+        
+    except Exception as e:
+        print(f"Error in verbatim context aggregation: {e}")
+        # Fallback to original commentary matching for critical data points
+        await process_legacy_commentary_matching(results, document_text)
+
+
+async def extract_verbatim_contexts(results: Dict[str, Any], document_text: List[str]) -> List[Dict[str, Any]]:
+    """
+    Extract verbatim contexts for all entities while preserving exact formatting and language
+    """
+    import re
+    
+    # Collect all extracted entities from different sources
+    all_entities = []
+    
+    # Process tables
+    for table in results.get("processed_tables", []):
+        if table.get("structured_table") and not table["structured_table"].get("error"):
+            table_data = table["structured_table"]
+            page = table.get("page", 1)
+            
+            # Convert table rows to entity format
+            if "table_rows" in table_data:
+                headers = table_data.get("table_headers", [])
+                for i, row in enumerate(table_data["table_rows"]):
+                    if isinstance(row, list) and len(row) > 0:
+                        entity = {"source": f"Table {page}", "type": "Table Data", "page": page}
+                        
+                        # Map row data to headers if available
+                        if headers and len(headers) == len(row):
+                            for j, header in enumerate(headers):
+                                if j < len(row):
+                                    entity[header] = row[j]
+                        else:
+                            # Generic field mapping
+                            for j, value in enumerate(row):
+                                entity[f"Field_{j+1}"] = value
+                        
+                        all_entities.append(entity)
+            else:
+                # Handle key-value table format
+                for key, value in table_data.items():
+                    if key != "error" and value:
+                        entity = {
+                            "source": f"Table {page}",
+                            "type": "Table Data",
+                            "field": key,
+                            "value": str(value),
+                            "page": page
+                        }
+                        all_entities.append(entity)
+    
+    # Process key-value pairs
+    if results.get("processed_key_values"):
+        kv_data = results["processed_key_values"].get("structured_key_values", {})
+        if kv_data and not kv_data.get("error"):
+            for key, value in kv_data.items():
+                if key != "error" and value:
+                    entity = {
+                        "source": "Key-Value Pairs",
+                        "type": "Structured Data",
+                        "field": key,
+                        "value": str(value),
+                        "page": "N/A"
+                    }
+                    all_entities.append(entity)
+    
+    # Process document text facts
+    for chunk_idx, chunk in enumerate(results.get("processed_document_text", [])):
+        if "extracted_facts" in chunk and not chunk["extracted_facts"].get("error"):
+            facts = chunk["extracted_facts"]
+            for key, value in facts.items():
+                if key != "error" and value:
+                    # Determine if this is footnote content
+                    data_type = 'Footnote' if 'footnote' in key.lower() else 'Financial Data'
+                    field_name = key.replace('_Footnote', ' (Footnote)').replace('Footnote_', 'Footnote: ')
+                    
+                    entity = {
+                        "source": f"Text Chunk {chunk_idx+1}",
+                        "type": data_type,
+                        "field": field_name,
+                        "value": str(value),
+                        "page": "N/A"
+                    }
+                    all_entities.append(entity)
+    
+    # Join all document text preserving original formatting
+    full_document_text = '\n'.join(document_text)
+    
+    # Enhanced verbatim context extraction for each entity
+    enhanced_entities = []
+    
+    for entity in all_entities:
+        enhanced_entity = entity.copy()
+        
+        # Extract field and value for context matching
+        field = entity.get('field', '')
+        value = entity.get('value', '')
+        
+        # Use LLM with custom prompt if available, otherwise use verbatim matching
+        print(f"Processing entity {field}={value}, custom_prompt_set: {_custom_context_prompt is not None}")
+        if _custom_context_prompt:
+            try:
+                print(f"Using custom prompt for {field}={value}")
+                entity_type = entity.get('type', 'Data')
+                row_data = f"Field: {field}, Value: {value}, Type: {entity_type}"
+                context_result = await match_commentary_to_data(row_data, document_text)
+                llm_context = context_result.get('context', '') or context_result.get('commentary', '')
+                enhanced_entity['Context'] = llm_context
+                print(f"Custom prompt result for {field}: {llm_context[:100]}...")
+            except Exception as e:
+                print(f"Error using custom prompt for {field}: {e}")
+                import traceback
+                traceback.print_exc()
+                # Fallback to verbatim matching
+                contexts = find_verbatim_contexts(field, value, full_document_text, document_text)
+                enhanced_entity['Context'] = '. '.join([c for c in contexts if len(c.strip()) > 5]) if contexts else ''
+        else:
+            # Use verbatim matching (original behavior)
+            contexts = find_verbatim_contexts(field, value, full_document_text, document_text)
+            if contexts:
+                # Remove duplicates while preserving order
+                unique_contexts = []
+                seen = set()
+                for context in contexts:
+                    if context not in seen and len(context.strip()) > 5:
+                        unique_contexts.append(context)
+                        seen.add(context)
+                
+                # Join contexts with period separation
+                enhanced_entity['Context'] = '. '.join(unique_contexts)
+            else:
+                enhanced_entity['Context'] = ''
+        
+        enhanced_entities.append(enhanced_entity)
+    
+    return enhanced_entities
+
+
+def find_verbatim_contexts(field: str, value: str, full_text: str, text_lines: List[str]) -> List[str]:
+    """
+    Find all verbatim contexts for a field/value pair from the document text
+    """
+    import re
+    
+    contexts = []
+    
+    if not field and not value:
+        return contexts
+    
+    # Create comprehensive search patterns for field and value
+    search_terms = []
+    
+    if field:
+        # Clean field name for searching and create variations
+        field_clean = field.replace('_', ' ').replace('(Footnote)', '').strip()
+        if len(field_clean) > 2:
+            search_terms.append(field_clean)
+            
+            # Add field parts for compound fields
+            field_parts = field_clean.split()
+            if len(field_parts) > 1:
+                # Add individual meaningful parts (length > 3)
+                search_terms.extend([part for part in field_parts if len(part) > 3])
+                
+                # Add key combinations for financial terms
+                if len(field_parts) >= 2:
+                    # Try combinations like "Australian Broking", "Underlying NPAT", etc.
+                    for i in range(len(field_parts) - 1):
+                        combo = ' '.join(field_parts[i:i+2])
+                        if len(combo) > 5:
+                            search_terms.append(combo)
+    
+    if value:
+        # Clean value for searching
+        value_clean = str(value).strip()
+        if len(value_clean) > 2:
+            search_terms.append(value_clean)
+            
+            # Add numeric variations (e.g., "46.7mn" -> "46.7")
+            numeric_match = re.search(r'[\d,]+\.?\d*', value_clean)
+            if numeric_match:
+                search_terms.append(numeric_match.group())
+            
+            # Add currency variations (e.g., "AUD 46.7mn" -> "46.7mn")
+            currency_match = re.search(r'[A-Z]{3}\s*([\d,]+\.?\d*\w*)', value_clean)
+            if currency_match:
+                search_terms.append(currency_match.group(1))
+    
+    # Split document into sentences preserving original formatting
+    sentences = split_into_sentences_preserving_format(full_text)
+    
+    # Find sentences containing any search terms with comprehensive matching
+    found_sentences = set()  # Use set to avoid duplicates
+    
+    for sentence in sentences:
+        sentence_lower = sentence.lower()
+        
+        # Check if sentence contains any search terms
+        for term in search_terms:
+            if len(term) > 2:
+                term_lower = term.lower()
+                
+                # Multiple matching strategies
+                match_found = False
+                
+                # 1. Exact phrase match
+                if term_lower in sentence_lower:
+                    match_found = True
+                
+                # 2. Word boundary match for single words
+                elif ' ' not in term_lower and re.search(r'\b' + re.escape(term_lower) + r'\b', sentence_lower):
+                    match_found = True
+                
+                # 3. Fuzzy match for similar terms (85% similarity for longer terms)
+                elif len(term_lower) > 5:
+                    import difflib
+                    words_in_sentence = sentence_lower.split()
+                    for word in words_in_sentence:
+                        if len(word) > 4 and difflib.SequenceMatcher(None, word, term_lower).ratio() > 0.85:
+                            match_found = True
+                            break
+                
+                if match_found:
+                    # Exclude sentences that are just the field/value pair itself
+                    if not is_just_field_value_pair(sentence, field, value):
+                        found_sentences.add(sentence.strip())
+                        break
+    
+    # Convert back to list and sort by appearance order in document
+    contexts = []
+    for sentence in sentences:
+        if sentence.strip() in found_sentences:
+            contexts.append(sentence.strip())
+    
+    return contexts
+
+
+def split_into_sentences_preserving_format(text: str) -> List[str]:
+    """
+    Split text into sentences while preserving original formatting including special characters
+    """
+    import re
+    
+    sentences = []
+    
+    # Split text into lines first to preserve structure
+    lines = text.split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Check if this line starts with a bullet point
+        if re.match(r'^[†•◦]', line):
+            # This is a bullet point - treat as separate sentence
+            sentences.append(line)
+        elif re.match(r'^\d+\.', line):
+            # This is a numbered list item - treat as separate sentence
+            sentences.append(line)
+        elif ':' in line and len(line) < 50:
+            # This looks like a section header - treat as separate sentence
+            sentences.append(line)
+        else:
+            # Regular text - split on sentence boundaries
+            # Split on periods, exclamation marks, question marks
+            line_sentences = re.split(r'(?<=[.!?])\s+', line)
+            for sentence in line_sentences:
+                sentence = sentence.strip()
+                if len(sentence) > 5:
+                    sentences.append(sentence)
+    
+    return [s for s in sentences if len(s.strip()) > 5]
+
+
+def is_just_field_value_pair(sentence: str, field: str, value: str) -> bool:
+    """
+    Check if a sentence is just the field/value pair itself without additional context
+    """
+    sentence_clean = sentence.strip().lower()
+    
+    # If sentence is very short and only contains field/value, exclude it
+    if len(sentence_clean) < 20:
+        field_lower = field.lower() if field else ""
+        value_lower = str(value).lower() if value else ""
+        
+        # Check if sentence is mostly just the field and value
+        if field_lower and value_lower:
+            if (field_lower in sentence_clean and value_lower in sentence_clean and
+                len(sentence_clean.replace(field_lower, '').replace(value_lower, '').strip()) < 5):
+                return True
+    
+    return False
+
+
+async def process_legacy_commentary_matching(results: Dict[str, Any],
+                                           document_text: List[str]) -> None:
+    """Legacy commentary matching as fallback"""
+    print("Using legacy commentary matching as fallback...")
     
     # Skip commentary matching if document is too large or has too many data points
     total_data_points = 0
@@ -474,7 +840,7 @@ async def process_commentary_matching(results: Dict[str, Any],
                     print(f"Error matching commentary for table row: {e}")
                     break
     
-    print(f"Commentary matching completed for {processed_count} items")
+    print(f"Legacy commentary matching completed for {processed_count} items")
 
 
 def process_structured_data_with_llm(

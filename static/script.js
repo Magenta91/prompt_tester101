@@ -194,6 +194,13 @@ document.addEventListener('DOMContentLoaded', function() {
             extractedTextSection.appendChild(structuredInfo);
             extractedTextSection.classList.remove('d-none');
             
+            // Show prompt testing section
+            const promptTestingSection = document.getElementById('prompt-testing-section');
+            if (promptTestingSection) {
+                promptTestingSection.classList.remove('d-none');
+                console.log('Prompt testing section shown');
+            }
+            
             // Add event listener for AI processing
             document.getElementById('process-ai-btn').addEventListener('click', processText);
         }
@@ -1485,4 +1492,136 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     };
-});
+    // Prompt Testing Functionality
+    console.log('Looking for prompt testing elements...');
+    const testPromptBtn = document.getElementById('test-prompt-btn');
+    const resetPromptBtn = document.getElementById('reset-prompt-btn');
+    const customPromptTextarea = document.getElementById('custom-prompt');
+    const promptResults = document.getElementById('prompt-results');
+    const contextResultsBody = document.getElementById('context-results-body');
+    
+    console.log('Prompt testing elements found:', {
+        testBtn: !!testPromptBtn,
+        resetBtn: !!resetPromptBtn,
+        textarea: !!customPromptTextarea,
+        results: !!promptResults,
+        resultsBody: !!contextResultsBody
+    });
+
+    // Test custom prompt
+    if (testPromptBtn) {
+        console.log('Test prompt button found, attaching event listener');
+        testPromptBtn.addEventListener('click', async () => {
+            console.log('Test prompt button clicked!');
+            const customPrompt = customPromptTextarea.value.trim();
+            console.log('Custom prompt length:', customPrompt.length);
+            
+            if (!customPrompt) {
+                console.log('No custom prompt provided');
+                showError('Please enter a custom prompt');
+                return;
+            }
+
+            console.log('Starting prompt test...');
+            showLoading('Testing custom prompt...');
+            
+            try {
+                const response = await fetch('/test_prompt', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        custom_prompt: customPrompt
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to test prompt');
+                }
+
+                const result = await response.json();
+                console.log('Test prompt response:', result);
+                displayPromptResults(result);
+                
+            } catch (error) {
+                console.error('Error testing prompt:', error);
+                console.error('Error details:', error);
+                showError(error.message);
+            } finally {
+                hideLoading();
+            }
+        });
+    }
+
+    // Reset to default prompt
+    if (resetPromptBtn) {
+        resetPromptBtn.addEventListener('click', () => {
+            if (customPromptTextarea) {
+                customPromptTextarea.value = `You are a meticulous document analysis system. Your task is to:
+
+Entity Context Collection
+For {row_data}, collect all full sentences from {text_content} that describe or mention the entity by name, value, or identifier.
+Always extract the entire sentence/paragraph, never fragments.
+Keep duplicates only if they are in separate parts of the document and contextually meaningful.
+
+Concatenation
+Merge all entity-related sentences into one coherent block, preserving original order of appearance in the document.
+Separate sentences with a period or newline (do not cut off mid-sentence).
+
+Language Integrity
+Copy text exactly as it appears (same words, punctuation, grammar, and casing).
+Do not paraphrase, summarize, or "clean up" wording.
+
+General Commentary
+Any text that does not belong to an entity (i.e., not tied to any field/value) must be placed, word-for-word, into the "General Commentary" row.
+This row should contain all leftover text after entity contexts are assigned.
+
+No Text Loss Guarantee
+Every word from the input document must appear in the output (either in entity context or in general commentary).
+If in doubt whether a sentence belongs to an entity → place it in General Commentary instead of discarding.
+
+Return JSON:
+For entity rows:
+{"context": "all related sentences for this entity, in order, exact wording", "general_commentary": null}
+
+For the general commentary row:
+{"context": null, "general_commentary": "all remaining sentences word-for-word, in order"}`;
+                if (promptResults) {
+                    promptResults.classList.add('d-none');
+                }
+            }
+        });
+    }
+
+    // Display prompt test results
+    function displayPromptResults(result) {
+        if (contextResultsBody) {
+            contextResultsBody.innerHTML = '';
+            
+            if (result.context_data && result.context_data.length > 0) {
+                result.context_data.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><strong>${item.field}</strong></td>
+                        <td>${item.value}</td>
+                        <td style="max-width: 400px; word-wrap: break-word;">${item.context || '<em>No context</em>'}</td>
+                    `;
+                    contextResultsBody.appendChild(row);
+                });
+                
+                if (promptResults) {
+                    promptResults.classList.remove('d-none');
+                    
+                    // Scroll to results
+                    setTimeout(() => {
+                        promptResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
+                }
+            } else {
+                showError('No context data returned from prompt test');
+            }
+        }
+    }}); 
+// Close the main DOMContentLoaded event listener
