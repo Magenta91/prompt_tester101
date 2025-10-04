@@ -100,11 +100,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function uploadFile(file) {
+        console.log('uploadFile called with:', file.name, file.size, 'bytes');
         showLoading('Extracting text from PDF...');
         
         // Set up form data
         const formData = new FormData();
         formData.append('pdf', file);
+        console.log('FormData created, sending to /extract endpoint');
 
         // Show progress
         uploadProgress.classList.remove('d-none');
@@ -129,11 +131,14 @@ document.addEventListener('DOMContentLoaded', function() {
             body: formData
         })
         .then(response => {
+            console.log('Fetch response received:', response.status, response.statusText);
             clearInterval(progressInterval);
             progressBar.style.width = '100%';
             
             if (!response.ok) {
+                console.error('Response not OK:', response.status);
                 return response.json().then(data => {
+                    console.error('Error data:', data);
                     throw new Error(data.error || 'Failed to extract text');
                 });
             }
@@ -261,6 +266,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             try {
                                 const jsonStr = line.slice(6).trim();
                                 if (jsonStr && jsonStr !== '{}') {
+                                    console.log('Parsing streaming line:', jsonStr.substring(0, 100) + '...');
                                     const data = JSON.parse(jsonStr);
                                     handleStreamingData(data);
                                 }
@@ -287,9 +293,12 @@ document.addEventListener('DOMContentLoaded', function() {
     let tableInitialized = false;
 
     function handleStreamingData(data) {
+        console.log('Streaming data received:', data.type, data);
+        
         if (data.type === 'header') {
             // Handle CSV header
             streamedCSVRows = [data.content];  // Initialize with header
+            console.log('Header received:', data.content);
             if (!tableInitialized) {
                 initializeStreamingTable();
                 tableInitialized = true;
@@ -300,13 +309,19 @@ document.addEventListener('DOMContentLoaded', function() {
             displayStreamingCSVRow(data.content);
         } else if (data.type === 'complete') {
             hideLoading();
-            console.log('Streaming complete. Total rows:', data.total_rows);
+            console.log('🎉 Streaming complete. Total rows:', data.total_rows);
             // Reconstruct CSV data from streamed rows
             csvData = streamedCSVRows.join('\n');
+            console.log('📊 CSV data reconstructed, length:', csvData.length);
+            console.log('📄 CSV data preview:', csvData.substring(0, 200) + '...');
+            console.log('🔧 Calling finalizeStreamingDisplay...');
             finalizeStreamingDisplay(data.cost_summary);
+            console.log('✅ finalizeStreamingDisplay completed');
         } else if (data.status === 'error') {
             hideLoading();
             showError('Processing failed: ' + data.error);
+        } else {
+            console.log('Unknown streaming data type:', data);
         }
     }
 
@@ -426,11 +441,52 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function finalizeStreamingDisplay(costSummary = null) {
-        // Re-attach export event listeners
-        document.getElementById('export-xlsx-btn').addEventListener('click', exportXlsx);
-        document.getElementById('export-csv-btn').addEventListener('click', exportCsv);
-        document.getElementById('export-json-btn').addEventListener('click', exportJson);
-        document.getElementById('export-pdf-btn').addEventListener('click', exportPdf);
+        console.log('🔧 finalizeStreamingDisplay called with costSummary:', !!costSummary);
+        
+        // Re-attach export event listeners (remove existing first to prevent duplicates)
+        const xlsxBtn = document.getElementById('export-xlsx-btn');
+        const csvBtn = document.getElementById('export-csv-btn');
+        const jsonBtn = document.getElementById('export-json-btn');
+        const pdfBtn = document.getElementById('export-pdf-btn');
+        
+        console.log('🔍 Looking for export buttons...');
+        console.log('XLSX button found:', !!xlsxBtn);
+        console.log('CSV button found:', !!csvBtn);
+        console.log('JSON button found:', !!jsonBtn);
+        console.log('PDF button found:', !!pdfBtn);
+        
+        if (xlsxBtn) {
+            xlsxBtn.removeEventListener('click', exportXlsx);
+            xlsxBtn.addEventListener('click', exportXlsx);
+            console.log('✅ XLSX export button event listener attached');
+            console.log('XLSX button element:', xlsxBtn);
+            console.log('csvData available for export:', !!csvData, 'Length:', csvData ? csvData.length : 0);
+        } else {
+            console.error('❌ XLSX export button not found!');
+            // Try to find it with a delay
+            setTimeout(() => {
+                const delayedBtn = document.getElementById('export-xlsx-btn');
+                if (delayedBtn) {
+                    console.log('🔄 Found XLSX button after delay, attaching listener...');
+                    delayedBtn.addEventListener('click', exportXlsx);
+                }
+            }, 1000);
+        }
+        
+        if (csvBtn) {
+            csvBtn.removeEventListener('click', exportCsv);
+            csvBtn.addEventListener('click', exportCsv);
+        }
+        
+        if (jsonBtn) {
+            jsonBtn.removeEventListener('click', exportJson);
+            jsonBtn.addEventListener('click', exportJson);
+        }
+        
+        if (pdfBtn) {
+            pdfBtn.removeEventListener('click', exportPdf);
+            pdfBtn.addEventListener('click', exportPdf);
+        }
         
         // Add summary with cost information
         const summaryDiv = document.createElement('div');
@@ -1305,11 +1361,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function exportXlsx() {
+        console.log('exportXlsx called');
+        console.log('csvData exists:', !!csvData);
+        console.log('csvData length:', csvData ? csvData.length : 'N/A');
+        
         if (!csvData) {
-            showError('No data to export');
+            console.error('No csvData available for export');
+            showError('No data to export. Please process the document first.');
             return;
         }
 
+        console.log('Starting XLSX export...');
         showLoading('Generating XLSX file...');
 
         fetch('/export_xlsx', {
@@ -1320,27 +1382,35 @@ document.addEventListener('DOMContentLoaded', function() {
             body: JSON.stringify({ csv_data: csvData })
         })
         .then(response => {
+            console.log('XLSX export response status:', response.status);
+            console.log('XLSX export response ok:', response.ok);
             hideLoading();
             
             if (!response.ok) {
+                console.error('XLSX export failed with status:', response.status);
                 return response.json().then(data => {
+                    console.error('XLSX export error data:', data);
                     throw new Error(data.error || 'Failed to generate XLSX');
                 });
             }
             
+            console.log('XLSX export successful, processing blob...');
             // Handle binary file download
             return response.blob();
         })
         .then(blob => {
+            console.log('XLSX blob received, size:', blob.size);
             // Create and click download link
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
             link.download = 'extracted_data_comments.xlsx';
             document.body.appendChild(link);
+            console.log('Triggering XLSX download...');
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
+            console.log('XLSX download completed');
         })
         .catch(error => {
             hideLoading();
@@ -1543,6 +1613,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 const result = await response.json();
                 console.log('Test prompt response:', result);
+                console.log('Performance stats:', result.performance_stats);
                 displayPromptResults(result);
                 
             } catch (error) {
@@ -1614,6 +1685,9 @@ For the general commentary row:
                 if (promptResults) {
                     promptResults.classList.remove('d-none');
                     
+                    // Display performance metrics if available
+                    displayPerformanceMetrics(result.performance_stats);
+                    
                     // Scroll to results
                     setTimeout(() => {
                         promptResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1623,5 +1697,123 @@ For the general commentary row:
                 showError('No context data returned from prompt test');
             }
         }
+    }
+
+    // Manual test function for debugging
+    window.testExportButton = function() {
+        console.log('=== EXPORT BUTTON TEST ===');
+        const xlsxBtn = document.getElementById('export-xlsx-btn');
+        console.log('Button exists:', !!xlsxBtn);
+        console.log('Button element:', xlsxBtn);
+        console.log('csvData exists:', !!csvData);
+        console.log('csvData length:', csvData ? csvData.length : 'N/A');
+        console.log('csvData preview:', csvData ? csvData.substring(0, 100) + '...' : 'No data');
+        
+        if (xlsxBtn) {
+            console.log('Button is visible:', xlsxBtn.offsetParent !== null);
+            console.log('Button is disabled:', xlsxBtn.disabled);
+            console.log('Manually triggering exportXlsx...');
+            exportXlsx();
+        }
+    };
+
+    // Manual function to fix export buttons
+    window.fixExportButtons = function() {
+        console.log('🔧 Manually fixing export buttons...');
+        
+        // Try to reconstruct csvData from the table if it's missing
+        if (!csvData) {
+            console.log('📊 csvData missing, trying to reconstruct from table...');
+            const table = document.querySelector('#results-table tbody');
+            if (table) {
+                const rows = table.querySelectorAll('tr');
+                const csvRows = ['Field,Value,Context']; // Header
+                
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length >= 3) {
+                        const field = cells[0].textContent.trim();
+                        const value = cells[1].textContent.trim();
+                        const context = cells[2].textContent.trim();
+                        csvRows.push(`"${field}","${value}","${context}"`);
+                    }
+                });
+                
+                csvData = csvRows.join('\n');
+                console.log('✅ csvData reconstructed from table, length:', csvData.length);
+            }
+        }
+        
+        // Attach event listeners
+        const xlsxBtn = document.getElementById('export-xlsx-btn');
+        if (xlsxBtn) {
+            xlsxBtn.removeEventListener('click', exportXlsx);
+            xlsxBtn.addEventListener('click', exportXlsx);
+            console.log('✅ XLSX button listener attached');
+        }
+        
+        console.log('🎯 Export buttons fixed! Try clicking Export as XLSX now.');
+    };
+
+    // Display performance metrics
+    function displayPerformanceMetrics(stats) {
+        if (!stats || Object.keys(stats).length === 0) {
+            console.log('No performance stats available');
+            return;
+        }
+
+        // Find or create performance metrics container
+        let metricsContainer = document.getElementById('performance-metrics');
+        if (!metricsContainer) {
+            metricsContainer = document.createElement('div');
+            metricsContainer.id = 'performance-metrics';
+            metricsContainer.className = 'alert alert-info mt-3';
+            
+            // Insert after the prompt results table
+            const promptResults = document.getElementById('prompt-results');
+            if (promptResults) {
+                promptResults.appendChild(metricsContainer);
+            }
+        }
+
+        // Create performance metrics HTML
+        const costSummary = stats.cost_summary || {};
+        const processingTime = stats.processing_time_seconds || 0;
+        const localPercent = stats.local_processing_percent || 0;
+        const successRate = stats.success_rate_percent || 0;
+        const apiCalls = stats.gpt_api_calls || 0;
+        const totalCost = costSummary.total_cost_usd || 0;
+
+        metricsContainer.innerHTML = `
+            <h6><i class="fas fa-chart-line"></i> Performance Metrics</h6>
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>Processing Time:</strong><br>
+                    <span class="text-success">${processingTime.toFixed(2)}s</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Local Processing:</strong><br>
+                    <span class="text-primary">${localPercent.toFixed(1)}%</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Success Rate:</strong><br>
+                    <span class="text-info">${successRate.toFixed(1)}%</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>API Cost:</strong><br>
+                    <span class="text-warning">$${totalCost.toFixed(4)}</span>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-6">
+                    <small><strong>API Calls:</strong> ${apiCalls} (vs 50+ in old method)</small>
+                </div>
+                <div class="col-md-6">
+                    <small><strong>Method:</strong> ${stats.method || 'optimized'}</small>
+                </div>
+            </div>
+        `;
+
+        console.log('Performance metrics displayed:', stats);
     }}); 
 // Close the main DOMContentLoaded event listener

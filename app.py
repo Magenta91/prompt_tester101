@@ -27,17 +27,30 @@ def index():
 
 @app.route('/extract', methods=['POST'])
 def extract():
+    print("Extract endpoint called")
+    print(f"Request files: {list(request.files.keys())}")
+    
     if 'pdf' not in request.files:
+        print("ERROR: No 'pdf' key in request.files")
         return jsonify({'error': 'No file uploaded'}), 400
     
     file = request.files['pdf']
+    print(f"File received: {file.filename}, size: {len(file.read()) if file else 'No file'}")
+    file.seek(0)  # Reset file pointer after reading for size
+    
     if file.filename == '':
+        print("ERROR: Empty filename")
         return jsonify({'error': 'No file selected'}), 400
     
     try:
+        print("Starting PDF processing...")
         # Extract structured data from PDF using Amazon Textract
         pdf_bytes = file.read()
+        print(f"PDF bytes read: {len(pdf_bytes)} bytes")
+        
+        print("Calling extract_structured_data_from_pdf_bytes...")
         structured_data = extract_structured_data_from_pdf_bytes(pdf_bytes)
+        print(f"Structured data extracted: {len(structured_data) if structured_data else 'None'} items")
         
         # Store file data in session for prompt testing
         import pickle
@@ -50,6 +63,9 @@ def extract():
         # Return the new JSON format
         return jsonify(structured_data)
     except Exception as e:
+        print(f"ERROR in extract endpoint: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 def summarize_commentary(text):
@@ -629,7 +645,13 @@ async def test_prompt():
         print(f"About to process with custom prompt set: {current_prompt is not None}")
         if current_prompt:
             print(f"Custom prompt preview: {current_prompt[:100]}...")
+            print("Note: Custom prompt testing is limited to 10 entities for faster processing")
+        
+        import time
+        start_time = time.time()
         result = await process_structured_data_with_llm_async(file_data)
+        end_time = time.time()
+        print(f"Processing completed in {end_time - start_time:.2f} seconds")
         
         # Check if custom prompt is still set after processing
         post_process_prompt = get_custom_context_prompt()
@@ -640,8 +662,16 @@ async def test_prompt():
         
         # Extract context data for display
         context_data = []
+        performance_stats = {}
+        
         if 'enhanced_data_with_comprehensive_context' in result:
-            for entity in result['enhanced_data_with_comprehensive_context']:
+            enhanced_data = result['enhanced_data_with_comprehensive_context']
+            
+            # Extract performance statistics
+            from structured_llm_processor import get_optimization_stats
+            performance_stats = get_optimization_stats(enhanced_data)
+            
+            for entity in enhanced_data:
                 context_data.append({
                     'field': entity.get('field', 'Unknown'),
                     'value': entity.get('value', ''),
@@ -651,7 +681,8 @@ async def test_prompt():
         return jsonify({
             'success': True,
             'context_data': context_data,
-            'total_entities': len(context_data)
+            'total_entities': len(context_data),
+            'performance_stats': performance_stats
         })
         
     except Exception as e:
@@ -665,6 +696,8 @@ async def test_prompt():
 def export_xlsx():
     """Export CSV data to XLSX format with specific sheet name"""
     try:
+        print("🔄 XLSX export endpoint called")
+        
         import io
         import csv
         from io import StringIO
@@ -672,13 +705,20 @@ def export_xlsx():
         from openpyxl.styles import Font, PatternFill, Alignment
         
         data = request.json
+        print(f"📊 Request data received: {bool(data)}")
+        
         if not data:
+            print("❌ No data provided in request")
             return jsonify({'error': 'No data provided'}), 400
             
         csv_data = data.get('csv_data', '')
+        print(f"📄 CSV data length: {len(csv_data) if csv_data else 0}")
         
         if not csv_data:
+            print("❌ No CSV data in request")
             return jsonify({'error': 'No CSV data provided'}), 400
+        
+        print("✅ Starting XLSX generation...")
         
         # Create workbook with specific sheet name
         wb = Workbook()
@@ -767,6 +807,7 @@ def export_xlsx():
         output.seek(0)
         
         # Return file
+        print("✅ XLSX file generated successfully, sending to client")
         return send_file(
             output,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -775,6 +816,9 @@ def export_xlsx():
         )
         
     except Exception as e:
+        print(f"❌ XLSX export error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': f'Failed to generate XLSX: {str(e)}'}), 500
 
 @app.route('/process', methods=['POST'])
