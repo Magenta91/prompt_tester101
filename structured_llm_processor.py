@@ -893,19 +893,41 @@ Return JSON with "context" key containing your response according to the custom 
             if content:
                 result = json.loads(content)
                 
-                # Extract context from response
-                context_text = result.get('context', '')
-                if not context_text:
-                    # Try alternative keys
-                    context_text = result.get('Context', result.get('response', result.get('analysis', '')))
+                # Extract context from response (handle nested structures)
+                context_text = ""
                 
-                if context_text:
+                # Try to extract context from various possible structures
+                if 'context' in result:
+                    context_value = result['context']
+                    if isinstance(context_value, dict):
+                        # Handle nested: {"context": {"context": "text"}}
+                        context_text = context_value.get('context', str(context_value))
+                    elif isinstance(context_value, str):
+                        # Handle simple: {"context": "text"}
+                        context_text = context_value
+                    else:
+                        context_text = str(context_value)
+                
+                # Try alternative keys if no context found
+                if not context_text:
+                    for key in ['Context', 'response', 'analysis', field]:
+                        if key in result:
+                            value = result[key]
+                            if isinstance(value, dict) and 'context' in value:
+                                context_text = value['context']
+                                break
+                            elif isinstance(value, str):
+                                context_text = value
+                                break
+                
+                # Set the context
+                if context_text and isinstance(context_text, str):
                     entity['Context'] = context_text
                     print(f"✅ Set unique context for {field}: {context_text[:100]}...")
                     processed_count += 1
                 else:
-                    # Use the entire response if no specific context field
-                    entity['Context'] = str(result)
+                    # Use a simplified version of the result
+                    entity['Context'] = f"Custom prompt result: {str(result)[:200]}..."
                     processed_count += 1
             else:
                 entity['Context'] = f"No response received for {field}"
@@ -913,10 +935,12 @@ Return JSON with "context" key containing your response according to the custom 
         except json.JSONDecodeError as e:
             print(f"JSON parsing error for {field}: {e}")
             print(f"Raw response: {content}")
-            entity['Context'] = f"Response parsing error: {content[:200] if content else 'No response'}"
+            entity['Context'] = f"Response parsing error: {str(content)[:200] if content else 'No response'}"
                 
         except Exception as e:
             print(f"Error processing {field}: {e}")
+            import traceback
+            traceback.print_exc()
             entity['Context'] = f"Processing error: {str(e)}"
     
     print(f"✅ Custom prompt processing completed for {processed_count} entities")
