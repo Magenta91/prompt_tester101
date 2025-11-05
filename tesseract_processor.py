@@ -3,8 +3,24 @@ import fitz  # PyMuPDF
 from PIL import Image
 import io
 import time
+import sys
 from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
+
+# Suppress MuPDF warnings
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="fitz")
+
+# Redirect stderr to suppress MuPDF font warnings
+class SuppressMuPDFWarnings:
+    def __enter__(self):
+        self._original_stderr = sys.stderr
+        sys.stderr = open('/dev/null', 'w')
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stderr.close()
+        sys.stderr = self._original_stderr
 
 # Load environment variables
 load_dotenv()
@@ -31,8 +47,9 @@ class TesseractProcessor:
         try:
             print("Using Tesseract OCR for PDF processing (fallback mode)")
             
-            # Convert PDF to images using PyMuPDF
-            pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
+            # Convert PDF to images using PyMuPDF (suppress warnings)
+            with SuppressMuPDFWarnings():
+                pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
             
             all_document_text = []
             tables = []
@@ -41,12 +58,13 @@ class TesseractProcessor:
             
             # Process each page
             for page_num in range(len(pdf_document)):
-                page = pdf_document.load_page(page_num)
-                
-                # Convert page to image
-                mat = fitz.Matrix(2.0, 2.0)  # 2x zoom for better OCR quality
-                pix = page.get_pixmap(matrix=mat)
-                img_data = pix.tobytes("png")
+                with SuppressMuPDFWarnings():
+                    page = pdf_document.load_page(page_num)
+                    
+                    # Convert page to image
+                    mat = fitz.Matrix(2.0, 2.0)  # 2x zoom for better OCR quality
+                    pix = page.get_pixmap(matrix=mat)
+                    img_data = pix.tobytes("png")
                 
                 # Convert to PIL Image
                 image = Image.open(io.BytesIO(img_data))

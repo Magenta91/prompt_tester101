@@ -807,7 +807,7 @@ def pre_filter_entity_matches(entities: List[Dict[str, Any]], document_text: Lis
         if matching_sentences:
             # Sort by relevance (longer sentences with more matches first)
             matching_sentences.sort(key=lambda x: len(x), reverse=True)
-            entity_matches[entity_idx] = matching_sentences[:3]  # Limit to top 3 matches
+            entity_matches[entity_idx] = list(matching_sentences[:3])  # Convert slice to list
     
     # Collect unmatched sentences
     unmatched_sentences = [s for s in sentences if s.strip() not in matched_sentences and len(s.strip()) > 25]
