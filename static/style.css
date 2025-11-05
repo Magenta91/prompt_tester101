@@ -1,0 +1,145 @@
+/* Upload area styling */
+.upload-area {
+    border: 2px dashed #007bff;
+    border-radius: 10px;
+    padding: 40px;
+    text-align: center;
+    background-color: #f8f9fa;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.upload-area:hover {
+    border-color: #0056b3;
+    background-color: #e3f2fd;
+}
+
+.upload-area.dragover {
+    border-color: #28a745;
+    background-color: #d4edda;
+}
+
+/* Results table styling */
+.table-responsive {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.table th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+/* Loading spinner */
+.loading-spinner {
+    padding: 20px;
+}
+
+/* Status messages */
+.alert {
+    margin-bottom: 10px;
+}
+
+/* Custom prompt textarea */
+#custom-prompt {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+}
+
+/* Performance metrics */
+#performance-metrics {
+    border-left: 4px solid #17a2b8;
+}
+
+#performance-metrics .row {
+    margin: 0;
+}
+
+#performance-metrics .col-md-3 {
+    padding: 5px 10px;
+}
+
+/* Export buttons */
+.export-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .export-buttons {
+        flex-direction: column;
+    }
+    
+    .export-buttons .btn {
+        margin-bottom: 5px;
+    }
+    
+    .table-responsive {
+        font-size: 14px;
+    }
+}
+
+/* Context column styling */
+.context-cell {
+    max-width: 400px;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+/* JSON modal styling */
+#json-content {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* Card styling */
+.card {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border: none;
+    margin-bottom: 20px;
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    font-weight: 600;
+}
+
+/* Button styling */
+.btn {
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+.btn-lg {
+    padding: 12px 24px;
+    font-size: 18px;
+}
+
+/* Table styling */
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(0,0,0,.02);
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(0,0,0,.04);
+}
+
+/* Prompt results styling */
+#prompt-results .table-success th {
+    background-color: #d1e7dd;
+    color: #0f5132;
+}
+
+/* Utility classes */
+.text-truncate-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
