@@ -31,6 +31,24 @@ MANIFEST
 venv/
 ENV/
 env/
+Scripts/
+Lib/
+Include/
+pyvenv.cfg
+
+# Flask
+instance/
+.webassets-cache
+
+# Pytest
+.pytest_cache/
+.coverage
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
 
 # IDE
 .vscode/

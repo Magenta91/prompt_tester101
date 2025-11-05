@@ -3,60 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Text Extractor and Tabulator</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <title>PDF Table Extractor with AI Context</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="/static/style.css" rel="stylesheet">
 </head>
 <body>
-    <div class="container mt-4">
-        <header class="text-center mb-4">
-            <h1>PDF Text Extractor and Tabulator</h1>
-            <p class="lead">Upload a PDF, extract text, and analyze it with AI to create structured tables</p>
-        </header>
-
-        <div class="card mb-4 shadow-sm">
-            <div class="card-header bg-primary text-white">
-                <h4 class="mb-0"><i class="bi bi-file-earmark-pdf"></i> Upload PDF</h4>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="text-center my-4">
+                    <i class="bi bi-file-earmark-pdf text-primary"></i>
+                    PDF Table Extractor with AI Context
+                </h1>
             </div>
-            <div class="card-body">
-                <div class="upload-area p-4 border rounded text-center mb-3" id="drop-area">
-                    <div class="mb-3">
-                        <i class="bi bi-cloud-arrow-up display-4"></i>
-                        <p>Drag and drop your PDF file here or click to browse</p>
+        </div>
+
+        <!-- Upload Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="bi bi-upload"></i> Upload PDF Document</h5>
                     </div>
-                    <input type="file" id="file-input" accept=".pdf" class="d-none">
-                    <button class="btn btn-outline-primary" id="browse-btn">Browse Files</button>
-                </div>
-                <div id="file-info" class="alert alert-info d-none"></div>
-                <div class="progress d-none" id="upload-progress">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card mb-4 shadow-sm d-none" id="extracted-text-section">
-            <div class="card-header bg-secondary text-white">
-                <h4 class="mb-0"><i class="bi bi-file-text"></i> Extracted Text</h4>
-            </div>
-            <div class="card-body">
-                <div id="text-controls" class="mb-3">
-                    <button class="btn btn-primary" id="process-btn">Process with AI</button>
-                </div>
-                <div class="extracted-text p-3 border rounded bg-light">
-                    <pre id="extracted-text-content" class="mb-0" style="white-space: pre-wrap;"></pre>
+                    <div class="card-body">
+                        <div class="upload-area" id="upload-area">
+                            <i class="bi bi-cloud-upload" style="font-size: 3rem; color: #007bff;"></i>
+                            <h4>Drop PDF file here or click to browse</h4>
+                            <p class="text-muted">Supports PDF files up to 50MB</p>
+                            <input type="file" id="pdf-input" accept=".pdf" style="display: none;">
+                            <button class="btn btn-primary" onclick="document.getElementById('pdf-input').click()">
+                                <i class="bi bi-folder2-open"></i> Browse Files
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="card mb-4 shadow-sm d-none" id="prompt-testing-section">
-            <div class="card-header bg-warning text-dark">
-                <h4 class="mb-0"><i class="bi bi-code-square"></i> Test Context Extraction Prompt</h4>
+        <!-- Processing Section -->
+        <div class="row mb-4" id="processing-section" style="display: none;">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="bi bi-gear"></i> AI Processing</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center mt-3">
+                            <button id="process-ai-btn" class="btn btn-primary btn-lg">
+                                <i class="bi bi-gear"></i> Process with AI
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm ms-2" onclick="showJsonModal()">
+                                <i class="bi bi-code"></i> View Raw Data
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <label for="custom-prompt" class="form-label">Custom Context Extraction Prompt:</label>
-                    <textarea class="form-control" id="custom-prompt" rows="8" placeholder="Enter your custom prompt here. Use {row_data} and {text_content} as placeholders.">You are a meticulous document analysis system. Your task is to:
+        </div>
+
+        <!-- Prompt Testing Section -->
+        <div class="row mb-4" id="prompt-testing-section" style="display: none;">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="bi bi-chat-square-text"></i> Custom Prompt Testing</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="custom-prompt" class="form-label">Custom Context Extraction Prompt:</label>
+                            <textarea class="form-control" id="custom-prompt" rows="6" 
+                                 placeholder="Enter your custom prompt here. Use {row_data} and {text_content} as placeholders.">You are a meticulous document analysis system. Your task is to:
 
 Entity Context Collection
 For {row_data}, collect all full sentences from {text_content} that describe or mention the entity by name, value, or identifier.
@@ -85,73 +102,122 @@ For entity rows:
 
 For the general commentary row:
 {"context": null, "general_commentary": "all remaining sentences word-for-word, in order"}</textarea>
-                </div>
-                <div class="d-flex gap-2 mb-3">
-                    <button class="btn btn-warning" id="test-prompt-btn"><i class="bi bi-play-circle"></i> Test Prompt</button>
-                    <button class="btn btn-outline-secondary" id="reset-prompt-btn">Reset to Default</button>
-                </div>
-                <div id="prompt-results" class="d-none">
-                    <h5>Context Results:</h5>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-bordered">
-                            <thead class="table-dark">
-                                <tr>
-                                    <th>Field</th>
-                                    <th>Value</th>
-                                    <th>Context</th>
-                                </tr>
-                            </thead>
-                            <tbody id="context-results-body"></tbody>
-                        </table>
+                        </div>
+                        <div class="text-center">
+                            <button id="test-prompt-btn" class="btn btn-success">
+                                <i class="bi bi-play-circle"></i> Test Custom Prompt
+                            </button>
+                            <button id="clear-prompt-btn" class="btn btn-outline-secondary ms-2">
+                                <i class="bi bi-x-circle"></i> Clear
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="card mb-4 shadow-sm d-none" id="results-section">
-            <div class="card-header bg-success text-white">
-                <h4 class="mb-0"><i class="bi bi-table"></i> Extracted Information</h4>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-striped table-bordered" id="results-table">
-                        <thead class="table-dark">
-                            <tr id="table-header"></tr>
-                        </thead>
-                        <tbody id="table-body"></tbody>
-                    </table>
+        <!-- Loading Spinner -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="loading-spinner text-center" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2" id="loading-text">Processing...</p>
                 </div>
+            </div>
+        </div>
 
-                <div class="export-options mt-4">
-                    <h5 class="mb-3">Export Options</h5>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-primary" id="export-xlsx-btn"><i class="bi bi-file-earmark-excel"></i> Export as XLSX</button>
-                        <button class="btn btn-outline-success" id="export-csv-btn">Export as CSV</button>
-                        <button class="btn btn-outline-primary" id="export-json-btn">Export as JSON</button>
-                        <button class="btn btn-outline-danger" id="export-pdf-btn">Export as PDF</button>
+        <!-- Results Section -->
+        <div class="row" id="results-section" style="display: none;">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="bi bi-table"></i> Extracted Data with AI Context</h5>
+                        <div>
+                            <button class="btn btn-primary" id="export-xlsx-btn"><i class="bi bi-file-earmark-excel"></i> Export as XLSX</button>
+                            <button class="btn btn-outline-success" id="export-csv-btn">Export as CSV</button>
+                            <button class="btn btn-outline-primary" id="export-json-btn">Export as JSON</button>
+                            <button class="btn btn-outline-danger" id="export-pdf-btn">Export as PDF</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="results-table">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th style="width: 25%;">Field</th>
+                                        <th style="width: 25%;">Value</th>
+                                        <th style="width: 50%;">Context</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="results-tbody">
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div id="loading-overlay" class="position-fixed top-0 start-0 w-100 h-100 d-none" 
-             style="background-color: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; flex-direction: column;">
-            <div class="spinner-border text-light" role="status">
-                <span class="visually-hidden">Loading...</span>
+        <!-- Prompt Results Section -->
+        <div class="row mt-4" id="prompt-results" style="display: none;">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="bi bi-check-circle"></i> Custom Prompt Test Results</h5>
+                        <div>
+                            <button class="btn btn-primary btn-sm" id="export-prompt-xlsx-btn">
+                                <i class="bi bi-file-earmark-excel"></i> Export XLSX
+                            </button>
+                            <button class="btn btn-outline-success btn-sm" id="export-prompt-csv-btn">
+                                <i class="bi bi-file-earmark-text"></i> Export CSV
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead class="table-success">
+                                    <tr>
+                                        <th style="width: 25%;">Field</th>
+                                        <th style="width: 25%;">Value</th>
+                                        <th style="width: 50%;">Context (Custom Prompt)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="context-results-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <p id="loading-message" class="text-light mt-2">Processing...</p>
         </div>
 
-        <div class="alert alert-danger d-none" id="error-message"></div>
+        <!-- Status Messages -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div id="status-messages"></div>
+            </div>
+        </div>
     </div>
 
-    <footer class="bg-light py-3 mt-5">
-        <div class="container text-center">
-            <p class="text-muted mb-0">PDF Text Extractor and Tabulator © 2025 • Powered by OpenAI</p>
+    <!-- Raw Data Modal -->
+    <div class="modal fade" id="jsonModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Raw Extracted Data</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <pre id="json-content" class="bg-light p-3" style="max-height: 500px; overflow-y: auto;"></pre>
+                </div>
+            </div>
         </div>
-    </footer>
+    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/script.js"></script>
 </body>
 </html>

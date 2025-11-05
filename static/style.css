@@ -1,90 +1,145 @@
-/* Custom styles for PDF Text Extractor and Tabulator */
-body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f8f9fa;
-}
-
+/* Upload area styling */
 .upload-area {
-    border: 2px dashed #dee2e6;
-    border-radius: 5px;
+    border: 2px dashed #007bff;
+    border-radius: 10px;
+    padding: 40px;
+    text-align: center;
+    background-color: #f8f9fa;
     transition: all 0.3s ease;
     cursor: pointer;
 }
 
-.upload-area:hover, .upload-area.dragover {
-    border-color: #0d6efd;
-    background-color: rgba(13, 110, 253, 0.05);
+.upload-area:hover {
+    border-color: #0056b3;
+    background-color: #e3f2fd;
 }
 
-.extracted-text {
-    max-height: 300px;
+.upload-area.dragover {
+    border-color: #28a745;
+    background-color: #d4edda;
+}
+
+/* Results table styling */
+.table-responsive {
+    max-height: 600px;
     overflow-y: auto;
-}
-
-.alert {
-    border-radius: 5px;
-}
-
-/* Table styles */
-.table {
-    width: 100%;
-    margin-bottom: 1rem;
-    background-color: transparent;
 }
 
 .table th {
-    font-weight: 600;
-}
-
-.table-responsive {
-    max-height: 400px;
-    overflow-y: auto;
-}
-
-/* Commentary column styles */
-.commentary-cell {
-    max-width: 250px;
-    word-wrap: break-word;
-    font-size: 0.9em;
-}
-
-.has-commentary {
-    background-color: rgba(25, 135, 84, 0.05);
-}
-
-.has-commentary:hover {
-    background-color: rgba(25, 135, 84, 0.1);
-}
-
-.commentary-cell .text-muted {
-    line-height: 1.4;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 /* Loading spinner */
-#loading-overlay {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
-    z-index: 9999;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
+.loading-spinner {
+    padding: 20px;
 }
 
-#loading-overlay.active {
+/* Status messages */
+.alert {
+    margin-bottom: 10px;
+}
+
+/* Custom prompt textarea */
+#custom-prompt {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+}
+
+/* Performance metrics */
+#performance-metrics {
+    border-left: 4px solid #17a2b8;
+}
+
+#performance-metrics .row {
+    margin: 0;
+}
+
+#performance-metrics .col-md-3 {
+    padding: 5px 10px;
+}
+
+/* Export buttons */
+.export-buttons {
     display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-    .export-options .d-flex {
-        flex-wrap: wrap;
+    .export-buttons {
+        flex-direction: column;
     }
-    .export-options button {
-        margin-bottom: 0.5rem;
+    
+    .export-buttons .btn {
+        margin-bottom: 5px;
     }
+    
+    .table-responsive {
+        font-size: 14px;
+    }
+}
+
+/* Context column styling */
+.context-cell {
+    max-width: 400px;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+/* JSON modal styling */
+#json-content {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* Card styling */
+.card {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border: none;
+    margin-bottom: 20px;
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    font-weight: 600;
+}
+
+/* Button styling */
+.btn {
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+.btn-lg {
+    padding: 12px 24px;
+    font-size: 18px;
+}
+
+/* Table styling */
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(0,0,0,.02);
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(0,0,0,.04);
+}
+
+/* Prompt results styling */
+#prompt-results .table-success th {
+    background-color: #d1e7dd;
+    color: #0f5132;
+}
+
+/* Utility classes */
+.text-truncate-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }

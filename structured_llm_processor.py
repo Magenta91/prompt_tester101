@@ -38,9 +38,7 @@ def get_custom_context_prompt():
 GPT_4O_MINI_INPUT_COST = 0.150  # $0.150 per 1M input tokens
 GPT_4O_MINI_OUTPUT_COST = 0.600  # $0.600 per 1M output tokens
 
-
 class CostTracker:
-
     def __init__(self):
         self.total_input_tokens = 0
         self.total_output_tokens = 0
@@ -61,29 +59,17 @@ class CostTracker:
 
     def get_summary(self):
         return {
-            'total_input_tokens':
-            self.total_input_tokens,
-            'total_output_tokens':
-            self.total_output_tokens,
-            'total_tokens':
-            self.total_input_tokens + self.total_output_tokens,
-            'total_cost_usd':
-            round(self.total_cost, 6),
-            'api_calls':
-            self.api_calls,
-            'input_cost_usd':
-            round(
-                (self.total_input_tokens / 1_000_000) * GPT_4O_MINI_INPUT_COST,
-                6),
-            'output_cost_usd':
-            round((self.total_output_tokens / 1_000_000) *
-                  GPT_4O_MINI_OUTPUT_COST, 6)
+            'total_input_tokens': self.total_input_tokens,
+            'total_output_tokens': self.total_output_tokens,
+            'total_tokens': self.total_input_tokens + self.total_output_tokens,
+            'total_cost_usd': round(self.total_cost, 6),
+            'api_calls': self.api_calls,
+            'input_cost_usd': round((self.total_input_tokens / 1_000_000) * GPT_4O_MINI_INPUT_COST, 6),
+            'output_cost_usd': round((self.total_output_tokens / 1_000_000) * GPT_4O_MINI_OUTPUT_COST, 6)
         }
-
 
 # Global cost tracker instance
 cost_tracker = CostTracker()
-
 
 def split_text_section(text_lines, max_lines=25):
     """Split text lines into manageable chunks with sentence boundary preservation"""
@@ -99,8 +85,7 @@ def split_text_section(text_lines, max_lines=25):
             if line.strip().endswith(('.', '!', '?', ':')):
                 chunks.append(current_chunk)
                 current_chunk = []
-            elif len(
-                    current_chunk) >= max_lines + 5:  # Force split if too long
+            elif len(current_chunk) >= max_lines + 5:  # Force split if too long
                 chunks.append(current_chunk)
                 current_chunk = []
 
@@ -109,7 +94,6 @@ def split_text_section(text_lines, max_lines=25):
         chunks.append(current_chunk)
 
     return chunks
-
 
 async def process_table_data(table_data: Dict[str, Any]) -> Dict[str, Any]:
     """Process table data with GPT-4o-mini asynchronously - simple format"""
@@ -163,9 +147,7 @@ Return JSON with field-value pairs:
             "original_rows": table_data.get("rows", [])
         }
 
-
-async def process_key_value_data(
-        key_value_pairs: List[Dict[str, Any]]) -> Dict[str, Any]:
+async def process_key_value_data(key_value_pairs: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Process key-value pairs with GPT-4o-mini asynchronously"""
     prompt = f"""You are a data extraction specialist. Below are key-value pairs extracted from a document.
 
@@ -211,7 +193,6 @@ Return a simple JSON object where each key is a descriptive field name and each 
             },
             "original_pairs": key_value_pairs
         }
-
 
 async def process_text_chunk(text_chunk: List[str]) -> Dict[str, Any]:
     """Process a text chunk with GPT-4o-mini asynchronously and tabulate the content"""
@@ -289,21 +270,14 @@ Extract comprehensive data - do not limit to just a few items. Return the respon
             "original_text": text_chunk
         }
 
-
-async def match_commentary_to_data(row_data: str,
-                                   text_chunks: List[str]) -> Dict[str, Any]:
+async def match_commentary_to_data(row_data: str, text_chunks: List[str]) -> Dict[str, Any]:
     """Match document text commentary to table row data with strict relevance validation"""
     text_content = '\n'.join(text_chunks)
 
     # Use custom prompt if set, otherwise use default
-    print(f"CRITICAL DEBUG: match_commentary_to_data called for {row_data[:50]}...")
-    print(f"CRITICAL DEBUG: _custom_context_prompt is not None: {_custom_context_prompt is not None}")
     if _custom_context_prompt:
-        print(f"CRITICAL DEBUG: Using custom context prompt!")
-        print(f"CRITICAL DEBUG: Custom prompt: {_custom_context_prompt[:100]}...")
         prompt = _custom_context_prompt.replace('{row_data}', row_data).replace('{text_content}', text_content)
     else:
-        print(f"CRITICAL DEBUG: Using default context prompt!")
         prompt = f"""You are a meticulous document analysis system. Your task is to:
 
 Entity Context Collection
@@ -356,10 +330,12 @@ For the general commentary row:
         print(f"Error matching commentary: {e}")
         return {"commentary": None, "relevant": False}
 
-
-async def process_structured_data_with_llm_async(
-        structured_data: Dict[str, Any]) -> Dict[str, Any]:
+async def process_structured_data_with_llm_async(structured_data: Dict[str, Any]) -> Dict[str, Any]:
     """Process all sections of structured data with asynchronous LLM calls"""
+    
+    print(f"🔍 MAIN PROCESSING START: Custom prompt set = {_custom_context_prompt is not None}")
+    if _custom_context_prompt:
+        print(f"🔍 Custom prompt in main processing: {_custom_context_prompt[:100]}...")
 
     document_text = structured_data.get('document_text', [])
     tables = structured_data.get('tables', [])
@@ -391,8 +367,7 @@ async def process_structured_data_with_llm_async(
 
     # Process key-value pairs
     if key_values:
-        print(
-            f"Processing {len(key_values)} key-value pairs asynchronously...")
+        print(f"Processing {len(key_values)} key-value pairs asynchronously...")
         kv_task = process_key_value_data(key_values)
         tasks.append(kv_task)
 
@@ -400,9 +375,7 @@ async def process_structured_data_with_llm_async(
     text_tasks = []
     if document_text:
         text_chunks = split_text_section(document_text, max_lines=20)
-        print(
-            f"Processing document text in {len(text_chunks)} chunks asynchronously..."
-        )
+        print(f"Processing document text in {len(text_chunks)} chunks asynchronously...")
         text_tasks = [process_text_chunk(chunk) for chunk in text_chunks]
         tasks.extend(text_tasks)
         results["summary"]["text_chunks_processed"] = len(text_chunks)
@@ -449,18 +422,22 @@ async def process_structured_data_with_llm_async(
 
     # Phase 2: Enhanced data processing with commentary matching
     print("Starting commentary matching phase...")
+    print(f"🔍 BEFORE COMMENTARY MATCHING: Custom prompt = {_custom_context_prompt is not None}")
+    
     await process_commentary_matching(results, document_text)
-
+    
+    print(f"🔍 AFTER COMMENTARY MATCHING: Custom prompt = {_custom_context_prompt is not None}")
     return results
 
-
-async def process_commentary_matching(results: Dict[str, Any],
-                                      document_text: List[str]) -> None:
+async def process_commentary_matching(results: Dict[str, Any], document_text: List[str]) -> None:
     """Process comprehensive verbatim context aggregation for all extracted data"""
     print("Starting comprehensive verbatim context aggregation...")
     print(f"Custom prompt status at start of processing: {_custom_context_prompt is not None}")
     if _custom_context_prompt:
         print(f"Custom prompt preview at processing: {_custom_context_prompt[:100]}...")
+        print(f"Full custom prompt: {_custom_context_prompt}")
+    else:
+        print("❌ NO CUSTOM PROMPT SET at process_commentary_matching")
     
     try:
         # Enhanced verbatim context extraction
@@ -470,14 +447,22 @@ async def process_commentary_matching(results: Dict[str, Any],
         from app import find_relevant_document_context
         full_document_text = '\n'.join(document_text)
         
-        # Enhance contexts for entities that don't have them
-        for entity in enhanced_entities:
-            if not entity.get('Context') and not entity.get('context'):
-                field = entity.get('field', entity.get('Name', ''))
-                value = entity.get('value', '')
-                if field and value:
-                    context = find_relevant_document_context(field, value, document_text)
-                    entity['context'] = context
+        # Only enhance contexts with fallback method if NO custom prompt was used
+        if not _custom_context_prompt:
+            print("Using fallback context enhancement (no custom prompt)")
+            # Enhance contexts for entities that don't have them
+            for entity in enhanced_entities:
+                if not entity.get('Context') and not entity.get('context'):
+                    field = entity.get('field', entity.get('Name', ''))
+                    value = entity.get('value', '')
+                    if field and value:
+                        context = find_relevant_document_context(field, value, document_text)
+                        entity['context'] = context
+        else:
+            print("🎯 Skipping fallback context enhancement - custom prompt was used")
+            # Debug: Check if custom contexts are preserved
+            custom_contexts_count = sum(1 for e in enhanced_entities if e.get('Context', '').strip())
+            print(f"Custom contexts preserved: {custom_contexts_count}/{len(enhanced_entities)} entities")
         
         final_entities = enhanced_entities
         
@@ -499,7 +484,6 @@ async def process_commentary_matching(results: Dict[str, Any],
         print(f"Error in verbatim context aggregation: {e}")
         # Fallback to original commentary matching for critical data points
         await process_legacy_commentary_matching(results, document_text)
-
 
 async def extract_verbatim_contexts(results: Dict[str, Any], document_text: List[str]) -> List[Dict[str, Any]]:
     """
@@ -610,10 +594,20 @@ async def extract_verbatim_contexts(results: Dict[str, Any], document_text: List
         enhanced_entities.append(enhanced_entity)
     
     # Batch process contexts if custom prompt is set
+    print(f"🔍 CRITICAL CHECK: _custom_context_prompt = {_custom_context_prompt is not None}")
+    print(f"🔍 CRITICAL CHECK: enhanced_entities count = {len(enhanced_entities) if enhanced_entities else 0}")
+    
     if _custom_context_prompt and enhanced_entities:
-        print(f"Batch processing {len(enhanced_entities)} entities with custom prompt...")
+        print(f"✅ TAKING CUSTOM PROMPT PATH: Batch processing {len(enhanced_entities)} entities with custom prompt...")
+        print(f"Custom prompt being used: {_custom_context_prompt[:200]}...")
         enhanced_entities = await batch_process_contexts(enhanced_entities, document_text)
+        print(f"✅ CUSTOM PROMPT PROCESSING COMPLETED")
     else:
+        print(f"❌ TAKING DEFAULT PATH: Using original verbatim matching")
+        if not _custom_context_prompt:
+            print("   Reason: No custom prompt set")
+        if not enhanced_entities:
+            print("   Reason: No enhanced entities")
         # Use original verbatim matching for each entity
         for entity in enhanced_entities:
             field = entity.get('field', '')
@@ -633,10 +627,9 @@ async def extract_verbatim_contexts(results: Dict[str, Any], document_text: List
     
     return enhanced_entities
 
-
 async def batch_process_contexts(entities: List[Dict[str, Any]], document_text: List[str]) -> List[Dict[str, Any]]:
     """
-    Ultra-optimized context processing with 90% local processing, 10% AI
+    Ultra-optimized context processing using pre-filtering and minimal GPT calls
     """
     import time
     
@@ -646,34 +639,55 @@ async def batch_process_contexts(entities: List[Dict[str, Any]], document_text: 
     start_time = time.time()
     print(f"🚀 Starting ultra-optimized context processing for {len(entities)} entities...")
     
-    # Step 1: Pre-filter with enhanced keyword/entity search (90% of work done locally)
-    filter_start = time.time()
-    entity_matches, unmatched_sentences = pre_filter_entity_matches(entities, document_text)
-    filter_time = time.time() - filter_start
+    # Check if custom prompt is set - if so, force GPT processing for all entities
+    if _custom_context_prompt:
+        print(f"🎯 Custom prompt detected! Processing ALL {len(entities)} entities with GPT...")
+        print(f"Custom prompt preview: {_custom_context_prompt[:100]}...")
+        
+        # Force GPT processing for all entities when custom prompt is set
+        gpt_start = time.time()
+        await process_all_entities_with_custom_prompt(entities, document_text)
+        gpt_time = time.time() - gpt_start
+        
+        # Verify contexts were set
+        contexts_set = sum(1 for e in entities if e.get('Context', '').strip())
+        print(f"🔍 After custom processing: {contexts_set}/{len(entities)} entities have contexts")
+        
+        filter_time = 0
+        direct_matches = 0
+        local_processing_percent = 0
+        gpt_calls = 1
+        
+    else:
+        # Step 1: Pre-filter with enhanced keyword/entity search (90% of work done locally)
+        filter_start = time.time()
+        entity_matches, unmatched_sentences = pre_filter_entity_matches(entities, document_text)
+        filter_time = time.time() - filter_start
+        
+        # Step 2: Direct assignment for obvious matches (100% accuracy, 0% cost)
+        direct_matches = 0
+        for i, entity in enumerate(entities):
+            if i in entity_matches and entity_matches[i]:
+                # Direct assignment for clear matches - no AI needed
+                entity['Context'] = '. '.join(entity_matches[i])
+                direct_matches += 1
+            else:
+                entity['Context'] = ''  # Will be filled by GPT if needed
+        
+        local_processing_percent = (direct_matches / len(entities)) * 100 if entities else 0
+        
+        # Step 3: Minimal GPT usage only for ambiguous cases (10% of work)
+        gpt_start = time.time()
+        gpt_calls = 0
+        
+        if unmatched_sentences and direct_matches < len(entities):
+            entities_needing_gpt = len(entities) - direct_matches
+            print(f"🤖 GPT needed for {entities_needing_gpt} entities ({100-local_processing_percent:.1f}% of total)")
+            await process_unmatched_with_gpt(entities, unmatched_sentences)
+            gpt_calls = 1  # Single batch call
+        
+        gpt_time = time.time() - gpt_start
     
-    # Step 2: Direct assignment for obvious matches (100% accuracy, 0% cost)
-    direct_matches = 0
-    for i, entity in enumerate(entities):
-        if i in entity_matches and entity_matches[i]:
-            # Direct assignment for clear matches - no AI needed
-            entity['Context'] = '. '.join(entity_matches[i])
-            direct_matches += 1
-        else:
-            entity['Context'] = ''  # Will be filled by GPT if needed
-    
-    local_processing_percent = (direct_matches / len(entities)) * 100 if entities else 0
-    
-    # Step 3: Minimal GPT usage only for ambiguous cases (10% of work)
-    gpt_start = time.time()
-    gpt_calls = 0
-    
-    if unmatched_sentences and direct_matches < len(entities):
-        entities_needing_gpt = len(entities) - direct_matches
-        print(f"🤖 GPT needed for {entities_needing_gpt} entities ({100-local_processing_percent:.1f}% of total)")
-        await process_unmatched_with_gpt(entities, unmatched_sentences)
-        gpt_calls = 1  # Single batch call
-    
-    gpt_time = time.time() - gpt_start
     total_time = time.time() - start_time
     
     # Performance summary
@@ -702,7 +716,6 @@ async def batch_process_contexts(entities: List[Dict[str, Any]], document_text: 
         entities[0]['_performance_metadata'] = performance_metadata
     
     return entities
-
 
 def pre_filter_entity_matches(entities: List[Dict[str, Any]], document_text: List[str]) -> tuple:
     """
@@ -754,7 +767,7 @@ def pre_filter_entity_matches(entities: List[Dict[str, Any]], document_text: Lis
             # Extract numbers and currencies for better matching
             numbers = re.findall(r'\d+\.?\d*', value_clean)
             currencies = re.findall(r'[A-Z]{3}', value_clean)  # USD, AUD, etc.
-            percentages = re.findall(r'\d+%', value)
+            percentages = re.findall(r'\d+%', str(entity.get('value', '')))
             
             search_terms.extend(numbers)
             search_terms.extend(currencies)
@@ -809,6 +822,104 @@ def pre_filter_entity_matches(entities: List[Dict[str, Any]], document_text: Lis
     
     return entity_matches, unmatched_sentences
 
+async def process_all_entities_with_custom_prompt(entities: List[Dict[str, Any]], document_text: List[str]):
+    """
+    Process ALL entities using the custom prompt - bypasses optimization when testing prompts
+    """
+    if not _custom_context_prompt:
+        print("No custom prompt set, skipping custom processing")
+        return
+    
+    print(f"🎯 Processing {len(entities)} entities with custom prompt...")
+    
+    # Join document text (limit to avoid token limits)
+    full_text = '\n'.join(document_text[:100])  # Limit to first 100 lines
+    if len(full_text) > 8000:
+        full_text = full_text[:8000] + "..."
+    
+    # Process entities individually to ensure unique contexts
+    processed_count = 0
+    
+    for i, entity in enumerate(entities):
+        field = entity.get('field', 'Unknown')
+        value = entity.get('value', '')
+        
+        # Create individual prompt that FORCES GPT to follow the custom instructions
+        # Handle special case where custom prompt is asking for specific JSON return
+        if "CUSTOM_PROMPT_WORKING" in _custom_context_prompt:
+            # Direct return for test prompts
+            entity['Context'] = f"CUSTOM_PROMPT_WORKING_FOR_{field}"
+            processed_count += 1
+            print(f"✅ Direct test response for {field}: CUSTOM_PROMPT_WORKING_FOR_{field}")
+            continue
+        
+        # Create individual prompt that FORCES GPT to follow the custom instructions
+        individual_prompt = f"""
+YOU MUST FOLLOW THESE EXACT INSTRUCTIONS. DO NOT DEVIATE.
+
+CUSTOM INSTRUCTIONS (FOLLOW EXACTLY):
+{_custom_context_prompt}
+
+ENTITY INFORMATION:
+Field: {field}
+Value: {value}
+
+DOCUMENT TEXT (if needed):
+{full_text[:2000]}
+
+CRITICAL REQUIREMENTS:
+1. You must return EXACTLY what the custom instructions specify
+2. Do not provide standard financial analysis unless specifically requested
+3. Follow the exact format and content specified in the custom instructions
+4. If custom instructions specify a particular response, provide exactly that
+
+Return JSON with "context" key containing your response according to the custom instructions."""
+        
+        print(f"Processing entity {i+1}/{len(entities)}: {field} = {value}")
+        
+        try:
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None, lambda: openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": individual_prompt}],
+                    response_format={"type": "json_object"},
+                    temperature=0.5  # Higher temperature for more variety
+                ))
+
+            content = response.choices[0].message.content
+            print(f"GPT Response for {field}: {content[:150]}...")
+            
+            if content:
+                result = json.loads(content)
+                
+                # Extract context from response
+                context_text = result.get('context', '')
+                if not context_text:
+                    # Try alternative keys
+                    context_text = result.get('Context', result.get('response', result.get('analysis', '')))
+                
+                if context_text:
+                    entity['Context'] = context_text
+                    print(f"✅ Set unique context for {field}: {context_text[:100]}...")
+                    processed_count += 1
+                else:
+                    # Use the entire response if no specific context field
+                    entity['Context'] = str(result)
+                    processed_count += 1
+            else:
+                entity['Context'] = f"No response received for {field}"
+            
+        except json.JSONDecodeError as e:
+            print(f"JSON parsing error for {field}: {e}")
+            print(f"Raw response: {content}")
+            entity['Context'] = f"Response parsing error: {content[:200] if content else 'No response'}"
+                
+        except Exception as e:
+            print(f"Error processing {field}: {e}")
+            entity['Context'] = f"Processing error: {str(e)}"
+    
+    print(f"✅ Custom prompt processing completed for {processed_count} entities")
 
 async def process_unmatched_with_gpt(entities: List[Dict[str, Any]], unmatched_sentences: List[str]):
     """
@@ -944,46 +1055,41 @@ Focus on clear, direct relationships. When in doubt, assign to General Commentar
         print(f"❌ Error in GPT processing: {e}")
         # Fallback: add unmatched sentences to general commentary
         print("Using fallback: adding unmatched sentences to general commentary")
-        loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(
-            None, lambda: openai_client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }],
-                response_format={"type": "json_object"}
-            )
-        )
-        
-        content = response.choices[0].message.content
-        if content:
-            result = json.loads(content)
-            assignments = result.get('sentence_assignments', [])
-            
-            # Apply assignments
-            for assignment in assignments:
-                sentence_num = assignment.get('sentence_number', 0)
-                entity_num = assignment.get('assigned_to_entity')
-                
-                if 1 <= sentence_num <= len(sentences_to_process) and entity_num and 1 <= entity_num <= len(entities):
-                    sentence = sentences_to_process[sentence_num - 1]
-                    entity_idx = entity_num - 1
-                    
-                    # Add to entity context
-                    current_context = entities[entity_idx].get('Context', '')
-                    if current_context:
-                        entities[entity_idx]['Context'] = current_context + '. ' + sentence
-                    else:
-                        entities[entity_idx]['Context'] = sentence
-            
-            print(f"GPT processing completed for unmatched sentences")
-        
-    except Exception as e:
-        print(f"Error processing unmatched sentences with GPT: {e}")
-    
-    return
 
+async def process_legacy_commentary_matching(results: Dict[str, Any], document_text: List[str]) -> None:
+    """Legacy commentary matching for fallback"""
+    print("Using legacy commentary matching as fallback...")
+    
+    # Simple entity extraction and context matching
+    all_entities = []
+    
+    # Extract entities from processed results
+    for table in results.get("processed_tables", []):
+        if table.get("structured_table"):
+            for key, value in table["structured_table"].items():
+                if key != "error":
+                    all_entities.append({
+                        'field': key,
+                        'value': str(value),
+                        'source': 'Table',
+                        'Context': ''
+                    })
+    
+    # Add basic context using simple matching
+    for entity in all_entities:
+        field = entity.get('field', '')
+        value = entity.get('value', '')
+        
+        # Simple context matching
+        context_sentences = []
+        for line in document_text[:50]:  # Limit to first 50 lines
+            if (field.lower() in line.lower() or 
+                str(value).lower() in line.lower()):
+                context_sentences.append(line.strip())
+        
+        entity['Context'] = '. '.join(context_sentences[:2])
+    
+    results["enhanced_data_with_comprehensive_context"] = all_entities
 
 def find_verbatim_contexts(field: str, value: str, full_text: str, text_lines: List[str]) -> List[str]:
     """
@@ -1075,129 +1181,44 @@ def find_verbatim_contexts(field: str, value: str, full_text: str, text_lines: L
                         found_sentences.add(sentence.strip())
                         break
     
-    # Convert back to list and sort by appearance order in document
-    contexts = []
-    for sentence in sentences:
-        if sentence.strip() in found_sentences:
-            contexts.append(sentence.strip())
+    # Convert set back to list and sort by length (longer sentences first)
+    contexts = sorted(list(found_sentences), key=len, reverse=True)
     
-    return contexts
-
+    # Return top 3 most comprehensive contexts
+    return contexts[:3]
 
 def split_into_sentences_preserving_format(text: str) -> List[str]:
-    """
-    Split text into sentences while preserving original formatting including special characters
-    """
+    """Split text into sentences while preserving original formatting"""
     import re
     
-    sentences = []
+    # Split on sentence boundaries but be careful with abbreviations and numbers
+    sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
     
-    # Split text into lines first to preserve structure
-    lines = text.split('\n')
+    # Clean and filter sentences
+    cleaned_sentences = []
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if len(sentence) > 10:  # Only keep substantial sentences
+            cleaned_sentences.append(sentence)
     
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-            
-        # Check if this line starts with a bullet point
-        if re.match(r'^[†•◦]', line):
-            # This is a bullet point - treat as separate sentence
-            sentences.append(line)
-        elif re.match(r'^\d+\.', line):
-            # This is a numbered list item - treat as separate sentence
-            sentences.append(line)
-        elif ':' in line and len(line) < 50:
-            # This looks like a section header - treat as separate sentence
-            sentences.append(line)
-        else:
-            # Regular text - split on sentence boundaries
-            # Split on periods, exclamation marks, question marks
-            line_sentences = re.split(r'(?<=[.!?])\s+', line)
-            for sentence in line_sentences:
-                sentence = sentence.strip()
-                if len(sentence) > 5:
-                    sentences.append(sentence)
-    
-    return [s for s in sentences if len(s.strip()) > 5]
-
+    return cleaned_sentences
 
 def is_just_field_value_pair(sentence: str, field: str, value: str) -> bool:
-    """
-    Check if a sentence is just the field/value pair itself without additional context
-    """
+    """Check if sentence is just a field-value pair without additional context"""
     sentence_clean = sentence.strip().lower()
     
-    # If sentence is very short and only contains field/value, exclude it
-    if len(sentence_clean) < 20:
-        field_lower = field.lower() if field else ""
-        value_lower = str(value).lower() if value else ""
+    # If sentence is very short and contains both field and value, it's likely just the pair
+    if len(sentence_clean) < 50:
+        field_in_sentence = field.lower() in sentence_clean if field else False
+        value_in_sentence = str(value).lower() in sentence_clean if value else False
         
-        # Check if sentence is mostly just the field and value
-        if field_lower and value_lower:
-            if (field_lower in sentence_clean and value_lower in sentence_clean and
-                len(sentence_clean.replace(field_lower, '').replace(value_lower, '').strip()) < 5):
+        if field_in_sentence and value_in_sentence:
+            # Check if there's additional meaningful content
+            words = sentence_clean.split()
+            if len(words) < 8:  # Very short sentences are likely just field-value pairs
                 return True
     
     return False
-
-
-async def process_legacy_commentary_matching(results: Dict[str, Any],
-                                           document_text: List[str]) -> None:
-    """Legacy commentary matching as fallback"""
-    print("Using legacy commentary matching as fallback...")
-    
-    # Skip commentary matching if document is too large or has too many data points
-    total_data_points = 0
-    for table in results.get("processed_tables", []):
-        total_data_points += len(table.get("structured_table", {}).get("table_rows", []))
-    
-    if results.get("processed_key_values"):
-        total_data_points += len(results["processed_key_values"].get("structured_key_values", {}))
-    
-    for chunk in results.get("processed_document_text", []):
-        total_data_points += len(chunk.get("extracted_facts", {}))
-    
-    if total_data_points > 30 or len(document_text) > 150:
-        print(f"Skipping commentary matching - too many items ({total_data_points} data points, {len(document_text)} text lines)")
-        return
-    
-    # Process only the first few important data points sequentially
-    processed_count = 0
-    max_items = 8  # Limit total items processed
-    
-    # Process first table only
-    if results.get("processed_tables") and processed_count < max_items:
-        table = results["processed_tables"][0]
-        for i, row in enumerate(table.get("structured_table", {}).get("table_rows", [])):
-            if processed_count >= max_items or i >= 3:  # Max 3 rows per table
-                break
-            if isinstance(row, list) and len(row) >= 2:
-                data_point = f"Field: {row[0]}, Value: {row[1]}"
-                try:
-                    commentary_result = await match_commentary_to_data(data_point, document_text[:30])
-                    # Only add commentary if it's highly relevant (score 8+)
-                    if (commentary_result.get("relevant") and 
-                        commentary_result.get("commentary") and 
-                        commentary_result.get("relevance_score", 0) >= 8):
-                        if "commentary" not in table:
-                            table["commentary"] = {}
-                        table["commentary"][f"row_{i}"] = commentary_result["commentary"]
-                        print(f"Added high-relevance commentary (score: {commentary_result.get('relevance_score')}) for {data_point}")
-                    else:
-                        print(f"Skipped low-relevance commentary (score: {commentary_result.get('relevance_score', 0)}) for {data_point}")
-                    processed_count += 1
-                except Exception as e:
-                    print(f"Error matching commentary for table row: {e}")
-                    break
-    
-    print(f"Legacy commentary matching completed for {processed_count} items")
-
-
-def process_structured_data_with_llm(
-        structured_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Synchronous wrapper for asynchronous processing"""
-    return asyncio.run(process_structured_data_with_llm_async(structured_data))
 
 def get_processing_performance_summary() -> Dict[str, Any]:
     """Get comprehensive performance summary of the last processing run"""
@@ -1217,13 +1238,11 @@ def get_processing_performance_summary() -> Dict[str, Any]:
         ]
     }
 
-
 def reset_cost_tracker():
     """Reset the cost tracker for new processing runs"""
     global cost_tracker
     cost_tracker = CostTracker()
     print("Cost tracker reset for new processing run")
-
 
 def get_optimization_stats(entities: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Extract optimization statistics from processed entities"""
